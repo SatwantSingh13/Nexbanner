@@ -1,0 +1,43 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NexBanner Player Demo</title>
+    <style>
+      body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#102033;background:#f4f7fb}main{max-width:980px;margin:0 auto;padding:36px 20px}h1{margin:0 0 10px;font-size:34px}p{color:#5b6878;line-height:1.5}.demo-grid{display:grid;grid-template-columns:340px 1fr;gap:28px;align-items:start;margin-top:28px}.slot-frame{width:300px;min-height:250px;padding:18px;border-radius:8px;border:1px solid #d6e1ef;background:#fff}.notes{border-radius:8px;border:1px solid #d6e1ef;background:#fff;padding:20px}code{background:#edf3fb;border-radius:4px;padding:2px 5px}@media(max-width:760px){.demo-grid{grid-template-columns:1fr}}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>NexBanner Player MVP</h1>
+      <p>300x250 GAM-style creative that tries video first, then display, then remnant fallback.</p>
+      <div class="demo-grid">
+        <div class="slot-frame">
+          <div id="nexbanner-demo-slot"></div>
+          <script
+            src="../src/nexbanner-gam.js"
+            data-target="nexbanner-demo-slot"
+            data-publisher-id="demo-publisher"
+            data-placement-id="demo-300x250"
+            data-width="300"
+            data-height="250"
+            data-mode="video-first"
+            data-vast-url="../assets/nexbanner-vast-tag.xml"
+            data-video-url="../assets/nexbid-vast-tags.webm"
+            data-display-image-url="../assets/display-banner-1.png"
+            data-remnant-image-url="../assets/display-banner-2.png"
+            data-logo-text="N"
+            data-click-url="https://nexbid.uk">
+          </script>
+        </div>
+        <div class="notes">
+          <h2>Runtime Flow</h2>
+          <p><code>GAM creative</code> loads the NexBanner script.</p>
+          <p>The player requests VAST first and renders muted video inside the banner if a valid media file exists.</p>
+          <p>If video fails, display demand renders. If display fails, final ORTB/remnant fallback renders.</p>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>
