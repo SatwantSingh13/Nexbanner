@@ -20,10 +20,10 @@ https://cdn.nexbanner.com/nexbanner/beta/src/nexbanner-gam.js
 https://cdn.nexbanner.com/nexbanner/beta/src/nexbanner-player.js
 ```
 
-For the current Netlify-hosted beta, use:
+For Bunny.net deployment instructions, see:
 
 ```text
-https://nexbid-uk.netlify.app/cdn/nexbanner/beta/src/nexbanner-gam.js
+docs/bunny-cdn.md
 ```
 
 ## GAM Creative Tag With CDN Script
@@ -31,7 +31,7 @@ https://nexbid-uk.netlify.app/cdn/nexbanner/beta/src/nexbanner-gam.js
 ```html
 <div id="nexbanner-slot-%%CACHEBUSTER%%"></div>
 <script
-  src="https://nexbid-uk.netlify.app/cdn/nexbanner/beta/src/nexbanner-gam.js"
+  src="https://cdn.nexbanner.com/nexbanner/beta/src/nexbanner-gam.js"
   data-target="nexbanner-slot-%%CACHEBUSTER%%"
   data-publisher-id="PUB_ID"
   data-placement-id="PLACEMENT_ID"
