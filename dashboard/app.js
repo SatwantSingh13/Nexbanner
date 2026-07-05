@@ -2,6 +2,9 @@
   "use strict";
 
   var state = defaultState();
+  try {
+    window.localStorage.removeItem("nexbanner-dashboard-v1");
+  } catch (_) {}
   state.demand = state.demand || [];
   state.displayTags = state.displayTags || [];
   state.prebid = state.prebid || [];
