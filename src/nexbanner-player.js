@@ -84,6 +84,7 @@
   }
 
   function fetchDisplayDecision(config) {
+    if (config.auctionEndpoint) return jsonEndpoint(config.auctionEndpoint, config, "premium-display");
     if (config.displayEndpoint) return jsonEndpoint(config.displayEndpoint, config, "premium-display");
     if (!config.displayImageUrl) return Promise.reject(new Error("missing-display-demand"));
     return Promise.resolve({
@@ -96,6 +97,7 @@
   }
 
   function fetchRemnantDecision(config) {
+    if (config.auctionEndpoint) return jsonEndpoint(config.auctionEndpoint, config, "remnant-ortb");
     if (config.ortbEndpoint) return jsonEndpoint(config.ortbEndpoint, config, "remnant-ortb");
     if (!config.remnantImageUrl) return Promise.reject(new Error("missing-remnant-demand"));
     return Promise.resolve({
@@ -319,7 +321,7 @@
 
   function track(config, eventName, data) {
     var payload = data || {};
-    var endpoint = eventName.indexOf("error") >= 0 ? config.errorUrl : config.impressionUrl;
+    var endpoint = config.trackUrl || (eventName.indexOf("error") >= 0 ? config.errorUrl : "");
     if (!endpoint) return;
 
     var url = new URL(endpoint, window.location.href);
@@ -328,6 +330,9 @@
     url.searchParams.set("placement_id", config.placementId);
     url.searchParams.set("layer", payload.layer || "");
     url.searchParams.set("reason", payload.reason || "");
+    url.searchParams.set("cpm", payload.cpm || "");
+    url.searchParams.set("w", config.width);
+    url.searchParams.set("h", config.height);
     url.searchParams.set("cb", String(Date.now()) + Math.floor(Math.random() * 100000));
     pixel(url.toString());
   }

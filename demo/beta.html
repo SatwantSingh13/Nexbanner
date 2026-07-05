@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NexBanner Beta</title>
+    <style>
+      body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#102033;background:#f4f7fb}
+      main{max-width:980px;margin:0 auto;padding:36px 20px}
+      h1{margin:0 0 10px;font-size:34px}
+      p{color:#5b6878;line-height:1.5}
+      .grid{display:grid;grid-template-columns:340px 1fr;gap:28px;align-items:start;margin-top:28px}
+      .slot{width:300px;min-height:250px;padding:18px;border-radius:8px;border:1px solid #d6e1ef;background:#fff}
+      .panel{border-radius:8px;border:1px solid #d6e1ef;background:#fff;padding:20px}
+      code{background:#edf3fb;border-radius:4px;padding:2px 5px}
+      a{color:#1769e0}
+      @media(max-width:760px){.grid{grid-template-columns:1fr}}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>NexBanner Beta</h1>
+      <p>
+        Beta product demo using live-style NexBanner endpoints: VAST, auction, tracking, and reporting.
+      </p>
+
+      <div class="grid">
+        <div class="slot">
+          <div id="nexbanner-beta-slot"></div>
+          <script
+            src="../src/nexbanner-gam.js"
+            data-target="nexbanner-beta-slot"
+            data-publisher-id="beta-publisher"
+            data-placement-id="beta-300x250"
+            data-width="300"
+            data-height="250"
+            data-mode="video-first"
+            data-vast-url="http://localhost:8080/api/v1/vast"
+            data-auction-endpoint="http://localhost:8080/api/v1/auction"
+            data-track-url="http://localhost:8080/api/v1/track"
+            data-logo-text="N"
+            data-click-url="https://nexbid.uk">
+          </script>
+        </div>
+
+        <div class="panel">
+          <h2>Beta endpoints</h2>
+          <p>Health: <a href="http://localhost:8080/health">/health</a></p>
+          <p>Report: <a href="http://localhost:8080/api/v1/report">/api/v1/report</a></p>
+          <p>Run locally with: <code>node server/nexbanner-beta-server.js</code></p>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

@@ -19,9 +19,12 @@ GAM serves NexBanner creative script
 - `src/nexbanner-gam.js` - single script used in GAM
 - `src/nexbanner-player.js` - video-first player and fallback logic
 - `demo/index.html` - local demo page
+- `demo/beta.html` - beta product demo using API endpoints
 - `examples/gam-creative.html` - copy/paste GAM creative example
 - `assets/` - demo display and VAST assets
 - `docs/technical-blueprint.md` - product and integration notes
+- `docs/cdn-deployment.md` - CDN path and GAM tag guidance
+- `server/nexbanner-beta-server.js` - beta auction, VAST, tracking, and report server
 
 ## GAM Creative Example
 
@@ -47,10 +50,45 @@ GAM serves NexBanner creative script
 
 Replace demo assets with live endpoints:
 
+- `data-auction-endpoint` - unified auction endpoint for display and remnant decisions
 - `data-vast-url` - premium VAST auction endpoint
 - `data-display-endpoint` - premium display endpoint returning JSON
 - `data-ortb-endpoint` - final NexBanner ORTB fallback endpoint returning JSON
+- `data-track-url` - event tracking pixel endpoint
 - `data-logo-url` - optional Nexbid logo image for the top-left badge
+
+## Beta Product
+
+Run the local beta server:
+
+```bash
+node server/nexbanner-beta-server.js
+```
+
+Open the beta demo:
+
+```text
+http://localhost:8080/demo/beta.html
+```
+
+Open the report:
+
+```text
+http://localhost:8080/api/v1/report
+```
+
+## CDN Beta Tag
+
+Use the CDN-hosted script in GAM:
+
+```html
+<script
+  src="https://nexbid-uk.netlify.app/cdn/nexbanner/beta/src/nexbanner-gam.js"
+  data-vast-url="https://api.nexbanner.com/api/v1/vast"
+  data-auction-endpoint="https://api.nexbanner.com/api/v1/auction"
+  data-track-url="https://api.nexbanner.com/api/v1/track">
+</script>
+```
 
 Expected JSON response:
 
