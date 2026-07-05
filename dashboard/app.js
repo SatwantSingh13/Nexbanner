@@ -1,8 +1,7 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "nexbanner-dashboard-v1";
-  var state = loadState();
+  var state = defaultState();
   state.demand = state.demand || [];
   state.displayTags = state.displayTags || [];
   state.prebid = state.prebid || [];
@@ -358,15 +357,7 @@
 
   function saveFromForm() {
     state.setup = buildConfig().setup;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }
-
-  function loadState() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultState();
-    } catch (_) {
-      return defaultState();
-    }
+    state.setup = buildConfig().setup;
   }
 
   function defaultState() {
