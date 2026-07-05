@@ -57,7 +57,7 @@ https://nexbid.b-cdn.net
 Then the beta GAM script will be:
 
 ```text
-https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-gam.js
+https://nexbid.b-cdn.net/nexbanner/beta-v2/src/nexbanner-gam.js
 ```
 
 ## GAM Creative Tag
@@ -65,7 +65,7 @@ https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-gam.js
 ```html
 <div id="nexbanner-slot-%%CACHEBUSTER%%"></div>
 <script
-  src="https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-gam.js"
+  src="https://nexbid.b-cdn.net/nexbanner/beta-v2/src/nexbanner-gam.js"
   data-target="nexbanner-slot-%%CACHEBUSTER%%"
   data-publisher-id="PUB_ID"
   data-placement-id="PLACEMENT_ID"
@@ -92,4 +92,5 @@ For production:
 
 - Publish immutable versions like `/nexbanner/v1.0.0/`.
 - Keep `/nexbanner/latest/` only for controlled testing.
+
 

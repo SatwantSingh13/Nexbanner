@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -44,7 +44,7 @@
           </label>
           <label>
             CDN Script URL
-            <input id="cdnScript" value="https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-gam.js">
+            <input id="cdnScript" value="https://nexbid.b-cdn.net/nexbanner/beta-v2/src/nexbanner-gam.js">
           </label>
           <label>
             API Base URL
@@ -90,6 +90,35 @@
         <div class="demand-list" id="demandList"></div>
       </section>
 
+      <section class="panel">
+        <div class="section-title">
+          <p>Display JS</p>
+          <h2>Add Display Tag Script</h2>
+        </div>
+
+        <form id="displayTagForm" class="demand-form">
+          <label>
+            Tag Name
+            <input id="displayTagName" placeholder="Example: Display Partner JS" required>
+          </label>
+          <label>
+            JS Tag URL
+            <input id="displayTagUrl" placeholder="https://partner.com/display-300x250.js" required>
+          </label>
+          <label>
+            Floor CPM
+            <input id="displayTagFloor" value="0.10" inputmode="decimal">
+          </label>
+          <label>
+            Timeout MS
+            <input id="displayTagTimeout" value="800" inputmode="numeric">
+          </label>
+          <button type="submit">Add Display JS Tag</button>
+        </form>
+
+        <div class="demand-list" id="displayTagList"></div>
+      </section>
+
       <section class="panel output-panel">
         <div class="section-title">
           <p>Publisher Output</p>
@@ -122,3 +151,4 @@
     <script src="./app.js"></script>
   </body>
 </html>
+

@@ -3,6 +3,8 @@
 
   var STORAGE_KEY = "nexbanner-dashboard-v1";
   var state = loadState();
+  state.demand = state.demand || [];
+  state.displayTags = state.displayTags || [];
 
   var els = {
     publisherId: document.getElementById("publisherId"),
@@ -18,6 +20,12 @@
     floorCpm: document.getElementById("floorCpm"),
     timeoutMs: document.getElementById("timeoutMs"),
     demandList: document.getElementById("demandList"),
+    displayTagForm: document.getElementById("displayTagForm"),
+    displayTagName: document.getElementById("displayTagName"),
+    displayTagUrl: document.getElementById("displayTagUrl"),
+    displayTagFloor: document.getElementById("displayTagFloor"),
+    displayTagTimeout: document.getElementById("displayTagTimeout"),
+    displayTagList: document.getElementById("displayTagList"),
     tagOutput: document.getElementById("tagOutput"),
     generateTag: document.getElementById("generateTag"),
     copyTag: document.getElementById("copyTag"),
@@ -26,6 +34,7 @@
 
   hydrate();
   renderDemand();
+  renderDisplayTags();
   generateTag();
 
   els.demandForm.addEventListener("submit", function (event) {
@@ -43,6 +52,23 @@
     els.timeoutMs.value = "800";
     saveFromForm();
     renderDemand();
+    generateTag();
+  });
+
+  els.displayTagForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    state.displayTags.push({
+      id: String(Date.now()) + Math.floor(Math.random() * 10000),
+      name: els.displayTagName.value.trim(),
+      endpoint: els.displayTagUrl.value.trim(),
+      floorCpm: els.displayTagFloor.value.trim(),
+      timeoutMs: els.displayTagTimeout.value.trim()
+    });
+    els.displayTagForm.reset();
+    els.displayTagFloor.value = "0.10";
+    els.displayTagTimeout.value = "800";
+    saveFromForm();
+    renderDisplayTags();
     generateTag();
   });
 
@@ -126,10 +152,47 @@
     });
   }
 
+  function renderDisplayTags() {
+    els.displayTagList.innerHTML = "";
+
+    if (!state.displayTags.length) {
+      var empty = document.createElement("p");
+      empty.textContent = "No display JS tags added yet.";
+      empty.style.color = "#607083";
+      els.displayTagList.appendChild(empty);
+      return;
+    }
+
+    state.displayTags.forEach(function (item) {
+      var node = document.createElement("div");
+      node.className = "demand-item";
+      node.innerHTML = [
+        "<header>",
+        "<div><strong>" + escapeHtml(item.name) + "</strong><div class=\"badge\">Display JS Tag</div></div>",
+        "<button class=\"remove\" data-id=\"" + item.id + "\">Remove</button>",
+        "</header>",
+        "<code>" + escapeHtml(item.endpoint) + "</code>",
+        "<small>Floor $" + escapeHtml(item.floorCpm || "0") + " CPM, timeout " + escapeHtml(item.timeoutMs || "800") + "ms</small>"
+      ].join("");
+
+      node.querySelector(".remove").addEventListener("click", function () {
+        state.displayTags = state.displayTags.filter(function (existing) {
+          return existing.id !== item.id;
+        });
+        saveFromForm();
+        renderDisplayTags();
+        generateTag();
+      });
+
+      els.displayTagList.appendChild(node);
+    });
+  }
+
   function generateTag() {
     var config = buildConfig();
     var vast = firstEndpoint("vast");
     var display = firstEndpoint("display");
+    var displayJs = firstDisplayTag();
     var ortb = firstEndpoint("ortb");
     var apiBase = trimSlash(config.setup.apiBase);
 
@@ -146,6 +209,7 @@
       '  data-vast-url="' + (vast ? vast.endpoint : apiBase + "/api/v1/vast") + '"',
       '  data-auction-endpoint="' + apiBase + "/api/v1/auction" + '"',
       '  data-track-url="' + apiBase + "/api/v1/track" + '"',
+      displayJs ? '  data-display-script-url="' + displayJs.endpoint + '"' : "",
       display ? '  data-display-endpoint="' + display.endpoint + '"' : "",
       ortb ? '  data-ortb-endpoint="' + ortb.endpoint + '"' : "",
       '  data-logo-text="N"',
@@ -166,7 +230,8 @@
         cdnScript: els.cdnScript.value.trim(),
         apiBase: els.apiBase.value.trim()
       },
-      demand: state.demand
+      demand: state.demand,
+      displayTags: state.displayTags
     };
   }
 
@@ -186,7 +251,8 @@
   function defaultState() {
     return {
       setup: {},
-      demand: []
+      demand: [],
+      displayTags: []
     };
   }
 
@@ -194,6 +260,10 @@
     return state.demand.find(function (item) {
       return item.type === type;
     });
+  }
+
+  function firstDisplayTag() {
+    return state.displayTags[0] || null;
   }
 
   function labelFor(type) {

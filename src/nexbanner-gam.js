@@ -30,6 +30,7 @@
       videoUrl: data.videoUrl || "",
       auctionEndpoint: data.auctionEndpoint || "",
       displayEndpoint: data.displayEndpoint || "",
+      displayScriptUrl: data.displayScriptUrl || "",
       ortbEndpoint: data.ortbEndpoint || "",
       displayImageUrl: data.displayImageUrl || "",
       remnantImageUrl: data.remnantImageUrl || "",

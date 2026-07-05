@@ -84,6 +84,15 @@
   }
 
   function fetchDisplayDecision(config) {
+    if (config.displayScriptUrl) {
+      return Promise.resolve({
+        adType: "display-js",
+        scriptUrl: config.displayScriptUrl,
+        clickUrl: config.clickUrl,
+        layer: "display-js-tag"
+      });
+    }
+
     if (config.auctionEndpoint) return jsonEndpoint(config.auctionEndpoint, config, "premium-display");
     if (config.displayEndpoint) return jsonEndpoint(config.displayEndpoint, config, "premium-display");
     if (!config.displayImageUrl) return Promise.reject(new Error("missing-display-demand"));
@@ -124,7 +133,7 @@
         return response.json();
       })
       .then(function (ad) {
-        if (!ad || (!ad.imageUrl && !ad.html)) throw new Error(layer + "-empty");
+        if (!ad || (!ad.imageUrl && !ad.html && !ad.scriptUrl)) throw new Error(layer + "-empty");
         ad.layer = ad.layer || layer;
         return ad;
       });
@@ -205,6 +214,11 @@
       return;
     }
 
+    if (ad.scriptUrl) {
+      renderDisplayScript(root, config, ad);
+      return;
+    }
+
     var link = document.createElement("a");
     link.href = ad.clickUrl || config.clickUrl || "#";
     link.target = "_blank";
@@ -225,6 +239,32 @@
 
     link.appendChild(image);
     root.appendChild(link);
+    root.appendChild(brandBadge(config));
+  }
+
+  function renderDisplayScript(root, config, ad) {
+    var frame = document.createElement("iframe");
+    frame.title = "NexBanner display tag";
+    frame.width = config.width;
+    frame.height = config.height;
+    frame.setAttribute("scrolling", "no");
+    frame.setAttribute("frameborder", "0");
+    frame.className = "nbx-frame";
+    root.appendChild(frame);
+
+    var safeScriptUrl = escapeAttribute(ad.scriptUrl);
+    var html = [
+      "<!doctype html>",
+      "<html><head><meta charset=\"utf-8\">",
+      "<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent}</style>",
+      "</head><body>",
+      "<script src=\"" + safeScriptUrl + "\"><\\/script>",
+      "</body></html>"
+    ].join("");
+
+    frame.contentWindow.document.open();
+    frame.contentWindow.document.write(html);
+    frame.contentWindow.document.close();
     root.appendChild(brandBadge(config));
   }
 
@@ -345,6 +385,13 @@
 
   function resolveUrl(value, base) {
     try { return new URL(value, base).toString(); } catch (_) { return value; }
+  }
+
+  function escapeAttribute(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;");
   }
 
   function safePageUrl() {
