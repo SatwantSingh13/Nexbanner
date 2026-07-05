@@ -85,7 +85,7 @@ Use the Bunny.net CDN-hosted script in GAM:
 
 ```html
 <script
-  src="https://cdn.nexbanner.com/nexbanner/beta/src/nexbanner-gam.js"
+  src="https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-gam.js"
   data-vast-url="https://api.nexbanner.com/api/v1/vast"
   data-auction-endpoint="https://api.nexbanner.com/api/v1/auction"
   data-track-url="https://api.nexbanner.com/api/v1/track">
@@ -110,3 +110,4 @@ Expected JSON response:
   "layer": "premium-display"
 }
 ```
+

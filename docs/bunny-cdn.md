@@ -1,4 +1,4 @@
-# Bunny.net CDN Deployment
+﻿# Bunny.net CDN Deployment
 
 NexBanner beta JS and assets can be published to Bunny.net by uploading them to a Bunny Storage Zone connected to a Bunny Pull Zone.
 
@@ -51,13 +51,13 @@ The script uploads:
 If your Pull Zone hostname is:
 
 ```text
-https://cdn.nexbanner.com
+https://nexbid.b-cdn.net
 ```
 
 Then the beta GAM script will be:
 
 ```text
-https://cdn.nexbanner.com/nexbanner/beta/src/nexbanner-gam.js
+https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-gam.js
 ```
 
 ## GAM Creative Tag
@@ -65,7 +65,7 @@ https://cdn.nexbanner.com/nexbanner/beta/src/nexbanner-gam.js
 ```html
 <div id="nexbanner-slot-%%CACHEBUSTER%%"></div>
 <script
-  src="https://cdn.nexbanner.com/nexbanner/beta/src/nexbanner-gam.js"
+  src="https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-gam.js"
   data-target="nexbanner-slot-%%CACHEBUSTER%%"
   data-publisher-id="PUB_ID"
   data-placement-id="PLACEMENT_ID"
@@ -92,3 +92,4 @@ For production:
 
 - Publish immutable versions like `/nexbanner/v1.0.0/`.
 - Keep `/nexbanner/latest/` only for controlled testing.
+

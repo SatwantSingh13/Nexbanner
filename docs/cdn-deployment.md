@@ -1,4 +1,4 @@
-# NexBanner CDN Deployment
+﻿# NexBanner CDN Deployment
 
 ## CDN Files
 
@@ -16,8 +16,8 @@ These files should be served through CDN:
 Use a versioned path:
 
 ```text
-https://cdn.nexbanner.com/nexbanner/beta/src/nexbanner-gam.js
-https://cdn.nexbanner.com/nexbanner/beta/src/nexbanner-player.js
+https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-gam.js
+https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-player.js
 ```
 
 For Bunny.net deployment instructions, see:
@@ -31,7 +31,7 @@ docs/bunny-cdn.md
 ```html
 <div id="nexbanner-slot-%%CACHEBUSTER%%"></div>
 <script
-  src="https://cdn.nexbanner.com/nexbanner/beta/src/nexbanner-gam.js"
+  src="https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-gam.js"
   data-target="nexbanner-slot-%%CACHEBUSTER%%"
   data-publisher-id="PUB_ID"
   data-placement-id="PLACEMENT_ID"
@@ -58,3 +58,4 @@ For production:
 
 - Use immutable versioned paths like `/nexbanner/v1.0.0/`
 - Keep `/nexbanner/latest/` only for controlled testing
+
