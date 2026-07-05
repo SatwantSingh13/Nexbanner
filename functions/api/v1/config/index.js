@@ -28,11 +28,13 @@ export async function onRequestPost(context) {
 function normalizeConfig(configId, body) {
   const setup = body.setup || {};
   const demand = Array.isArray(body.demand) ? body.demand : [];
+  const vast = Array.isArray(body.vast) ? body.vast : [];
   const displayTags = Array.isArray(body.displayTags) ? body.displayTags : [];
   const prebid = Array.isArray(body.prebid) ? body.prebid : [];
   const adserverTags = Array.isArray(body.adserverTags) ? body.adserverTags : [];
   const apiBase = trimSlash(setup.apiBase || "https://nexbid.uk");
   const prebidItem = prebid[0] || {};
+  const vastDemand = demand.filter((item) => item.type === "vast").concat(vast);
 
   return {
     configId,
@@ -41,19 +43,23 @@ function normalizeConfig(configId, body) {
     width: Number(setup.width || 300),
     height: Number(setup.height || 250),
     mode: "video-first",
-    vastTags: demand.filter((item) => item.type === "vast").map((item) => item.endpoint).filter(Boolean),
+    vastTags: vastDemand.map(endpointOf).filter(Boolean),
     prebidEndpoint: prebidItem.endpoint || `${apiBase}/api/v1/auction`,
     prebidParams: prebidItem.params || "",
-    displayScriptUrls: displayTags.map((item) => item.endpoint).filter(Boolean),
+    displayScriptUrls: displayTags.map(endpointOf).filter(Boolean),
     adserverScriptUrls: adserverTags.filter((item) => item.tagType === "script").map((item) => item.endpoint).filter(Boolean),
     adserverHtmlTags: adserverTags.filter((item) => item.tagType === "html").map((item) => encodeURIComponent(item.html || "")).filter(Boolean),
-    displayEndpoint: (demand.find((item) => item.type === "display") || {}).endpoint || "",
-    ortbEndpoint: (demand.find((item) => item.type === "ortb") || {}).endpoint || `${apiBase}/api/v1/auction`,
+    displayEndpoint: endpointOf(demand.find((item) => item.type === "display") || {}) || "",
+    ortbEndpoint: endpointOf(demand.find((item) => item.type === "ortb") || {}) || `${apiBase}/api/v1/auction`,
     auctionEndpoint: `${apiBase}/api/v1/auction`,
     trackUrl: `${apiBase}/api/v1/track`,
     logoText: "N",
     clickUrl: "https://nexbid.uk",
   };
+}
+
+function endpointOf(item) {
+  return item.endpoint || item.url || item.tag || "";
 }
 
 function shortTag(configId, config) {
