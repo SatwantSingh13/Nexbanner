@@ -47,6 +47,12 @@ Multiple ad-server / MI tags:
 data-adserver-script-urls="https://mi1.com/tag.js|https://mi2.com/tag.js"
 ```
 
+Full GAM/passback HTML tags:
+
+```html
+data-adserver-html-tags="%3Cscript%20async%20src%3D%22https..."
+```
+
 ORTB fallback:
 
 ```html

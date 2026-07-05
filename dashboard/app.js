@@ -37,6 +37,8 @@
     prebidList: document.getElementById("prebidList"),
     adserverForm: document.getElementById("adserverForm"),
     adserverName: document.getElementById("adserverName"),
+    adserverTagType: document.getElementById("adserverTagType"),
+    adserverHtml: document.getElementById("adserverHtml"),
     adserverUrl: document.getElementById("adserverUrl"),
     adserverFloor: document.getElementById("adserverFloor"),
     adserverTimeout: document.getElementById("adserverTimeout"),
@@ -112,6 +114,8 @@
     state.adserverTags.push({
       id: String(Date.now()) + Math.floor(Math.random() * 10000),
       name: els.adserverName.value.trim(),
+      tagType: els.adserverTagType.value,
+      html: els.adserverHtml.value.trim(),
       endpoint: els.adserverUrl.value.trim(),
       floorCpm: els.adserverFloor.value.trim(),
       timeoutMs: els.adserverTimeout.value.trim()
@@ -290,6 +294,7 @@
     var display = firstEndpoint("display");
     var displayJsTags = endpointsFrom(state.displayTags);
     var adserverTags = endpointsFrom(state.adserverTags);
+    var adserverHtmlTags = htmlTagsFrom(state.adserverTags);
     var prebid = state.prebid[0] || null;
     var ortb = firstEndpoint("ortb");
     var apiBase = trimSlash(config.setup.apiBase);
@@ -311,6 +316,7 @@
       prebid && prebid.params ? '  data-prebid-params="' + encodeAttribute(prebid.params) + '"' : "",
       displayJsTags.length ? '  data-display-script-urls="' + displayJsTags.join("|") + '"' : "",
       adserverTags.length ? '  data-adserver-script-urls="' + adserverTags.join("|") + '"' : "",
+      adserverHtmlTags.length ? '  data-adserver-html-tags="' + adserverHtmlTags.join("|") + '"' : "",
       display ? '  data-display-endpoint="' + display.endpoint + '"' : "",
       ortb ? '  data-ortb-endpoint="' + ortb.endpoint + '"' : "",
       '  data-logo-text="N"',
@@ -375,7 +381,17 @@
   }
 
   function endpointsFrom(items) {
-    return items.map(function (item) { return item.endpoint; }).filter(Boolean);
+    return items
+      .filter(function (item) { return (item.tagType || "script") === "script"; })
+      .map(function (item) { return item.endpoint; })
+      .filter(Boolean);
+  }
+
+  function htmlTagsFrom(items) {
+    return items
+      .filter(function (item) { return item.tagType === "html"; })
+      .map(function (item) { return encodeURIComponent(item.html || ""); })
+      .filter(Boolean);
   }
 
   function labelFor(type) {

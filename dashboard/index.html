@@ -44,7 +44,7 @@
           </label>
           <label>
             CDN Script URL
-            <input id="cdnScript" value="https://nexbid.b-cdn.net/nexbanner/beta-v4/src/nexbanner-gam.js">
+            <input id="cdnScript" value="https://nexbid.b-cdn.net/nexbanner/beta-v5/src/nexbanner-gam.js">
           </label>
           <label>
             API Base URL
@@ -164,8 +164,19 @@
             <input id="adserverName" placeholder="Example: MI Account 1" required>
           </label>
           <label>
-            JS Tag URL
-            <input id="adserverUrl" placeholder="https://adserver.com/tag.js" required>
+            Tag Type
+            <select id="adserverTagType">
+              <option value="html">Full HTML / GAM Tag</option>
+              <option value="script">JS Script URL</option>
+            </select>
+          </label>
+          <label class="wide-field">
+            Full HTML / JavaScript Tag
+            <textarea id="adserverHtml" placeholder="<script async src=&quot;https://securepubads.g.doubleclick.net/tag/js/gpt.js&quot;></script>..." spellcheck="false"></textarea>
+          </label>
+          <label>
+            JS Script URL
+            <input id="adserverUrl" placeholder="https://adserver.com/tag.js">
           </label>
           <label>
             Floor CPM
@@ -213,6 +224,7 @@
     <script src="./app.js"></script>
   </body>
 </html>
+
 
 
 

@@ -133,8 +133,16 @@
     var scripts = []
       .concat(listFrom(config.displayScriptUrls))
       .concat(listFrom(config.adserverScriptUrls));
+    var htmlTags = listFrom(config.adserverHtmlTags);
 
     if (config.displayScriptUrl) scripts.unshift(config.displayScriptUrl);
+    if (htmlTags.length) {
+      return Promise.resolve({
+        adType: "adserver-html",
+        html: decodePayload(htmlTags[0]),
+        layer: "adserver-html-tag"
+      });
+    }
     if (!scripts.length) return Promise.reject(new Error("missing-adserver-tags"));
 
     return tryScriptTags(scripts, 0);
@@ -467,6 +475,14 @@
       .replace(/&/g, "&amp;")
       .replace(/"/g, "&quot;")
       .replace(/</g, "&lt;");
+  }
+
+  function decodePayload(value) {
+    try {
+      return decodeURIComponent(value);
+    } catch (_) {
+      return value;
+    }
   }
 
   function safePageUrl() {

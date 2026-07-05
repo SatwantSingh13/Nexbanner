@@ -36,6 +36,7 @@
       displayScriptUrl: data.displayScriptUrl || "",
       displayScriptUrls: splitList(data.displayScriptUrls),
       adserverScriptUrls: splitList(data.adserverScriptUrls),
+      adserverHtmlTags: splitList(data.adserverHtmlTags),
       ortbEndpoint: data.ortbEndpoint || "",
       displayImageUrl: data.displayImageUrl || "",
       remnantImageUrl: data.remnantImageUrl || "",
