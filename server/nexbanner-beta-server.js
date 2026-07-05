@@ -80,6 +80,20 @@ function runBetaAuction(layer, host) {
     };
   }
 
+  if (layer === "prebid") {
+    return {
+      adType: "display",
+      imageUrl: `${host}/assets/display-banner-1.png`,
+      clickUrl: "https://nexbid.uk",
+      impressionUrl: `${host}/api/v1/track?event=partner_impression&layer=prebid&cpm=0.55`,
+      cpm: 0.55,
+      currency: "USD",
+      layer: "prebid",
+      buyer: "nexbanner-beta-prebid",
+      prebidParams: query.prebid_params || "",
+    };
+  }
+
   if (layer === "remnant-ortb") {
     return {
       adType: "display",

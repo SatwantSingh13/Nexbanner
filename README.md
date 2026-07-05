@@ -26,6 +26,7 @@ GAM serves NexBanner creative script
 - `docs/technical-blueprint.md` - product and integration notes
 - `docs/cdn-deployment.md` - CDN path and GAM tag guidance
 - `docs/bunny-cdn.md` - Bunny.net upload setup and commands
+- `docs/demand-flow.md` - VAST, Prebid, ad-server, and ORTB waterfall flow
 - `server/nexbanner-beta-server.js` - beta auction, VAST, tracking, and report server
 - `scripts/deploy-bunny-cdn.js` - Bunny.net CDN upload script
 
@@ -86,7 +87,7 @@ Use the Bunny.net CDN-hosted script in GAM:
 
 ```html
 <script
-  src="https://nexbid.b-cdn.net/nexbanner/beta-v2/src/nexbanner-gam.js"
+  src="https://nexbid.b-cdn.net/nexbanner/beta-v3/src/nexbanner-gam.js"
   data-vast-url="https://api.nexbanner.com/api/v1/vast"
   data-auction-endpoint="https://api.nexbanner.com/api/v1/auction"
   data-track-url="https://api.nexbanner.com/api/v1/track">
@@ -111,5 +112,6 @@ Expected JSON response:
   "layer": "premium-display"
 }
 ```
+
 
 

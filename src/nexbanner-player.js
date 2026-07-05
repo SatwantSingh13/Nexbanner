@@ -18,7 +18,33 @@
       })
       .catch(function (error) {
         track(config, "video_no_fill", { reason: error.message });
-        runDisplay(root, config);
+        runPrebid(root, config);
+      });
+  }
+
+  function runPrebid(root, config) {
+    setStatus(root, "Checking Prebid demand");
+    fetchPrebidDecision(config)
+      .then(function (ad) {
+        if (!ad) throw new Error("no-prebid-ad");
+        renderDisplay(root, config, ad);
+      })
+      .catch(function (error) {
+        track(config, "prebid_no_fill", { reason: error.message });
+        runAdserver(root, config);
+      });
+  }
+
+  function runAdserver(root, config) {
+    setStatus(root, "Checking ad server demand");
+    fetchAdserverDecision(config)
+      .then(function (ad) {
+        if (!ad) throw new Error("no-adserver-ad");
+        renderDisplay(root, config, ad);
+      })
+      .catch(function (error) {
+        track(config, "adserver_no_fill", { reason: error.message });
+        runRemnant(root, config);
       });
   }
 
@@ -59,9 +85,18 @@
       });
     }
 
-    if (!config.vastUrl) return Promise.reject(new Error("missing-vast-url"));
+    var vastTags = listFrom(config.vastTags);
+    if (config.vastUrl) vastTags.push(config.vastUrl);
+    if (!vastTags.length) return Promise.reject(new Error("missing-vast-url"));
 
-    return withTimeout(fetch(config.vastUrl, { credentials: "omit" }), config.timeoutMs)
+    return tryVastTags(vastTags, config, 0);
+  }
+
+  function tryVastTags(vastTags, config, index) {
+    if (index >= vastTags.length) return Promise.reject(new Error("all-vast-no-fill"));
+    var vastUrl = vastTags[index];
+
+    return withTimeout(fetch(vastUrl, { credentials: "omit" }), config.timeoutMs)
       .then(function (response) {
         if (!response.ok) throw new Error("vast-http-" + response.status);
         return response.text();
@@ -74,13 +109,44 @@
         if (!media) throw new Error("vast-no-media");
 
         return {
-          mediaUrl: resolveUrl(media, config.vastUrl),
+          mediaUrl: resolveUrl(media, vastUrl),
           clickUrl: firstText(xml, "ClickThrough") || config.clickUrl,
           impressionUrl: firstText(xml, "Impression"),
           tracking: trackingEvents(xml),
-          layer: "premium-vast"
+          layer: "premium-vast",
+          sourceUrl: vastUrl
         };
+      })
+      .catch(function (error) {
+        track(config, "vast_tag_failed", { layer: "premium-vast", reason: error.message });
+        return tryVastTags(vastTags, config, index + 1);
       });
+  }
+
+  function fetchPrebidDecision(config) {
+    if (config.prebidEndpoint) return jsonEndpoint(config.prebidEndpoint, config, "prebid");
+    if (config.auctionEndpoint && config.prebidParams) return jsonEndpoint(config.auctionEndpoint, config, "prebid");
+    return Promise.reject(new Error("missing-prebid-demand"));
+  }
+
+  function fetchAdserverDecision(config) {
+    var scripts = []
+      .concat(listFrom(config.displayScriptUrls))
+      .concat(listFrom(config.adserverScriptUrls));
+
+    if (config.displayScriptUrl) scripts.unshift(config.displayScriptUrl);
+    if (!scripts.length) return Promise.reject(new Error("missing-adserver-tags"));
+
+    return tryScriptTags(scripts, 0);
+  }
+
+  function tryScriptTags(scripts, index) {
+    if (index >= scripts.length) return Promise.reject(new Error("all-adserver-tags-failed"));
+    return Promise.resolve({
+      adType: "display-js",
+      scriptUrl: scripts[index],
+      layer: index === 0 ? "display-js-tag" : "adserver-js-tag"
+    });
   }
 
   function fetchDisplayDecision(config) {
@@ -126,6 +192,7 @@
     url.searchParams.set("cb", config.cachebuster);
     url.searchParams.set("layer", layer);
     url.searchParams.set("page", safePageUrl());
+    if (layer === "prebid" && config.prebidParams) url.searchParams.set("prebid_params", config.prebidParams);
 
     return withTimeout(fetch(url.toString(), { credentials: "omit" }), config.timeoutMs)
       .then(function (response) {
@@ -385,6 +452,14 @@
 
   function resolveUrl(value, base) {
     try { return new URL(value, base).toString(); } catch (_) { return value; }
+  }
+
+  function listFrom(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    return String(value || "")
+      .split("|")
+      .map(function (item) { return item.trim(); })
+      .filter(Boolean);
   }
 
   function escapeAttribute(value) {

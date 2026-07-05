@@ -27,10 +27,15 @@
       height: numberOr(data.height, 250),
       mode: data.mode || "video-first",
       vastUrl: data.vastUrl || "",
+      vastTags: splitList(data.vastTags),
       videoUrl: data.videoUrl || "",
       auctionEndpoint: data.auctionEndpoint || "",
+      prebidEndpoint: data.prebidEndpoint || "",
+      prebidParams: data.prebidParams || "",
       displayEndpoint: data.displayEndpoint || "",
       displayScriptUrl: data.displayScriptUrl || "",
+      displayScriptUrls: splitList(data.displayScriptUrls),
+      adserverScriptUrls: splitList(data.adserverScriptUrls),
       ortbEndpoint: data.ortbEndpoint || "",
       displayImageUrl: data.displayImageUrl || "",
       remnantImageUrl: data.remnantImageUrl || "",
@@ -75,5 +80,12 @@
   function numberOr(value, fallback) {
     var parsed = parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function splitList(value) {
+    return String(value || "")
+      .split("|")
+      .map(function (item) { return item.trim(); })
+      .filter(Boolean);
   }
 })();

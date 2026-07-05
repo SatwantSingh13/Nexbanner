@@ -44,7 +44,7 @@
           </label>
           <label>
             CDN Script URL
-            <input id="cdnScript" value="https://nexbid.b-cdn.net/nexbanner/beta-v2/src/nexbanner-gam.js">
+            <input id="cdnScript" value="https://nexbid.b-cdn.net/nexbanner/beta-v3/src/nexbanner-gam.js">
           </label>
           <label>
             API Base URL
@@ -119,6 +119,68 @@
         <div class="demand-list" id="displayTagList"></div>
       </section>
 
+      <section class="panel">
+        <div class="section-title">
+          <p>Prebid</p>
+          <h2>Add Prebid Parameters</h2>
+        </div>
+
+        <form id="prebidForm" class="demand-form">
+          <label>
+            Prebid Name
+            <input id="prebidName" placeholder="Example: Premium Prebid Demand" required>
+          </label>
+          <label>
+            Prebid Endpoint
+            <input id="prebidEndpoint" placeholder="https://api.nexbanner.com/api/v1/auction">
+          </label>
+          <label class="wide-field">
+            Prebid Params JSON
+            <textarea id="prebidParams" placeholder='{"bidder":"partner","params":{"placementId":"123"}}' spellcheck="false"></textarea>
+          </label>
+          <label>
+            Floor CPM
+            <input id="prebidFloor" value="0.20" inputmode="decimal">
+          </label>
+          <label>
+            Timeout MS
+            <input id="prebidTimeout" value="900" inputmode="numeric">
+          </label>
+          <button type="submit">Add Prebid Params</button>
+        </form>
+
+        <div class="demand-list" id="prebidList"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <p>Ad Manager / MI</p>
+          <h2>Add Ad Server Tags</h2>
+        </div>
+
+        <form id="adserverForm" class="demand-form">
+          <label>
+            Account / Tag Name
+            <input id="adserverName" placeholder="Example: MI Account 1" required>
+          </label>
+          <label>
+            JS Tag URL
+            <input id="adserverUrl" placeholder="https://adserver.com/tag.js" required>
+          </label>
+          <label>
+            Floor CPM
+            <input id="adserverFloor" value="0.10" inputmode="decimal">
+          </label>
+          <label>
+            Timeout MS
+            <input id="adserverTimeout" value="900" inputmode="numeric">
+          </label>
+          <button type="submit">Add Ad Server Tag</button>
+        </form>
+
+        <div class="demand-list" id="adserverList"></div>
+      </section>
+
       <section class="panel output-panel">
         <div class="section-title">
           <p>Publisher Output</p>
@@ -151,4 +213,5 @@
     <script src="./app.js"></script>
   </body>
 </html>
+
 

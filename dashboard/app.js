@@ -5,6 +5,8 @@
   var state = loadState();
   state.demand = state.demand || [];
   state.displayTags = state.displayTags || [];
+  state.prebid = state.prebid || [];
+  state.adserverTags = state.adserverTags || [];
 
   var els = {
     publisherId: document.getElementById("publisherId"),
@@ -26,6 +28,19 @@
     displayTagFloor: document.getElementById("displayTagFloor"),
     displayTagTimeout: document.getElementById("displayTagTimeout"),
     displayTagList: document.getElementById("displayTagList"),
+    prebidForm: document.getElementById("prebidForm"),
+    prebidName: document.getElementById("prebidName"),
+    prebidEndpoint: document.getElementById("prebidEndpoint"),
+    prebidParams: document.getElementById("prebidParams"),
+    prebidFloor: document.getElementById("prebidFloor"),
+    prebidTimeout: document.getElementById("prebidTimeout"),
+    prebidList: document.getElementById("prebidList"),
+    adserverForm: document.getElementById("adserverForm"),
+    adserverName: document.getElementById("adserverName"),
+    adserverUrl: document.getElementById("adserverUrl"),
+    adserverFloor: document.getElementById("adserverFloor"),
+    adserverTimeout: document.getElementById("adserverTimeout"),
+    adserverList: document.getElementById("adserverList"),
     tagOutput: document.getElementById("tagOutput"),
     generateTag: document.getElementById("generateTag"),
     copyTag: document.getElementById("copyTag"),
@@ -35,6 +50,8 @@
   hydrate();
   renderDemand();
   renderDisplayTags();
+  renderPrebid();
+  renderAdserverTags();
   generateTag();
 
   els.demandForm.addEventListener("submit", function (event) {
@@ -69,6 +86,41 @@
     els.displayTagTimeout.value = "800";
     saveFromForm();
     renderDisplayTags();
+    generateTag();
+  });
+
+  els.prebidForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    state.prebid.push({
+      id: String(Date.now()) + Math.floor(Math.random() * 10000),
+      name: els.prebidName.value.trim(),
+      endpoint: els.prebidEndpoint.value.trim(),
+      params: els.prebidParams.value.trim(),
+      floorCpm: els.prebidFloor.value.trim(),
+      timeoutMs: els.prebidTimeout.value.trim()
+    });
+    els.prebidForm.reset();
+    els.prebidFloor.value = "0.20";
+    els.prebidTimeout.value = "900";
+    saveFromForm();
+    renderPrebid();
+    generateTag();
+  });
+
+  els.adserverForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    state.adserverTags.push({
+      id: String(Date.now()) + Math.floor(Math.random() * 10000),
+      name: els.adserverName.value.trim(),
+      endpoint: els.adserverUrl.value.trim(),
+      floorCpm: els.adserverFloor.value.trim(),
+      timeoutMs: els.adserverTimeout.value.trim()
+    });
+    els.adserverForm.reset();
+    els.adserverFloor.value = "0.10";
+    els.adserverTimeout.value = "900";
+    saveFromForm();
+    renderAdserverTags();
     generateTag();
   });
 
@@ -188,11 +240,57 @@
     });
   }
 
+  function renderPrebid() {
+    els.prebidList.innerHTML = "";
+
+    if (!state.prebid.length) {
+      appendEmpty(els.prebidList, "No Prebid parameters added yet.");
+      return;
+    }
+
+    state.prebid.forEach(function (item) {
+      var node = demandNode(item, "Prebid Params", item.endpoint || "Uses API Base /api/v1/auction");
+      node.querySelector(".remove").addEventListener("click", function () {
+        state.prebid = state.prebid.filter(function (existing) {
+          return existing.id !== item.id;
+        });
+        saveFromForm();
+        renderPrebid();
+        generateTag();
+      });
+      els.prebidList.appendChild(node);
+    });
+  }
+
+  function renderAdserverTags() {
+    els.adserverList.innerHTML = "";
+
+    if (!state.adserverTags.length) {
+      appendEmpty(els.adserverList, "No Ad Manager / MI tags added yet.");
+      return;
+    }
+
+    state.adserverTags.forEach(function (item) {
+      var node = demandNode(item, "Ad Server JS", item.endpoint);
+      node.querySelector(".remove").addEventListener("click", function () {
+        state.adserverTags = state.adserverTags.filter(function (existing) {
+          return existing.id !== item.id;
+        });
+        saveFromForm();
+        renderAdserverTags();
+        generateTag();
+      });
+      els.adserverList.appendChild(node);
+    });
+  }
+
   function generateTag() {
     var config = buildConfig();
-    var vast = firstEndpoint("vast");
+    var vastTags = endpointsFor("vast");
     var display = firstEndpoint("display");
-    var displayJs = firstDisplayTag();
+    var displayJsTags = endpointsFrom(state.displayTags);
+    var adserverTags = endpointsFrom(state.adserverTags);
+    var prebid = state.prebid[0] || null;
     var ortb = firstEndpoint("ortb");
     var apiBase = trimSlash(config.setup.apiBase);
 
@@ -206,10 +304,13 @@
       '  data-width="' + config.setup.width + '"',
       '  data-height="' + config.setup.height + '"',
       '  data-mode="video-first"',
-      '  data-vast-url="' + (vast ? vast.endpoint : apiBase + "/api/v1/vast") + '"',
+      vastTags.length ? '  data-vast-tags="' + vastTags.join("|") + '"' : '  data-vast-url="' + apiBase + "/api/v1/vast" + '"',
       '  data-auction-endpoint="' + apiBase + "/api/v1/auction" + '"',
       '  data-track-url="' + apiBase + "/api/v1/track" + '"',
-      displayJs ? '  data-display-script-url="' + displayJs.endpoint + '"' : "",
+      prebid && prebid.endpoint ? '  data-prebid-endpoint="' + prebid.endpoint + '"' : "",
+      prebid && prebid.params ? '  data-prebid-params="' + encodeAttribute(prebid.params) + '"' : "",
+      displayJsTags.length ? '  data-display-script-urls="' + displayJsTags.join("|") + '"' : "",
+      adserverTags.length ? '  data-adserver-script-urls="' + adserverTags.join("|") + '"' : "",
       display ? '  data-display-endpoint="' + display.endpoint + '"' : "",
       ortb ? '  data-ortb-endpoint="' + ortb.endpoint + '"' : "",
       '  data-logo-text="N"',
@@ -231,7 +332,9 @@
         apiBase: els.apiBase.value.trim()
       },
       demand: state.demand,
-      displayTags: state.displayTags
+      displayTags: state.displayTags,
+      prebid: state.prebid,
+      adserverTags: state.adserverTags
     };
   }
 
@@ -252,7 +355,9 @@
     return {
       setup: {},
       demand: [],
-      displayTags: []
+      displayTags: [],
+      prebid: [],
+      adserverTags: []
     };
   }
 
@@ -262,8 +367,15 @@
     });
   }
 
-  function firstDisplayTag() {
-    return state.displayTags[0] || null;
+  function endpointsFor(type) {
+    return state.demand
+      .filter(function (item) { return item.type === type; })
+      .map(function (item) { return item.endpoint; })
+      .filter(Boolean);
+  }
+
+  function endpointsFrom(items) {
+    return items.map(function (item) { return item.endpoint; }).filter(Boolean);
   }
 
   function labelFor(type) {
@@ -282,5 +394,33 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  function encodeAttribute(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;");
+  }
+
+  function appendEmpty(parent, text) {
+    var empty = document.createElement("p");
+    empty.textContent = text;
+    empty.style.color = "#607083";
+    parent.appendChild(empty);
+  }
+
+  function demandNode(item, label, endpointText) {
+    var node = document.createElement("div");
+    node.className = "demand-item";
+    node.innerHTML = [
+      "<header>",
+      "<div><strong>" + escapeHtml(item.name) + "</strong><div class=\"badge\">" + escapeHtml(label) + "</div></div>",
+      "<button class=\"remove\" data-id=\"" + item.id + "\">Remove</button>",
+      "</header>",
+      "<code>" + escapeHtml(endpointText) + "</code>",
+      "<small>Floor $" + escapeHtml(item.floorCpm || "0") + " CPM, timeout " + escapeHtml(item.timeoutMs || "800") + "ms</small>"
+    ].join("");
+    return node;
   }
 })();
