@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NexBanner Dashboard</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">N</span>
+        <div>
+          <strong>NexBanner</strong>
+          <span>Demand and Tag Dashboard</span>
+        </div>
+      </div>
+      <button id="exportConfig" class="secondary">Export Config</button>
+    </header>
+
+    <main class="layout">
+      <section class="panel setup-panel">
+        <div class="section-title">
+          <p>Setup</p>
+          <h1>Create Publisher Tag</h1>
+        </div>
+
+        <div class="form-grid">
+          <label>
+            Publisher ID
+            <input id="publisherId" value="demo-publisher" autocomplete="off">
+          </label>
+          <label>
+            Placement ID
+            <input id="placementId" value="home-300x250" autocomplete="off">
+          </label>
+          <label>
+            Width
+            <input id="width" value="300" inputmode="numeric">
+          </label>
+          <label>
+            Height
+            <input id="height" value="250" inputmode="numeric">
+          </label>
+          <label>
+            CDN Script URL
+            <input id="cdnScript" value="https://nexbid.b-cdn.net/nexbanner/beta/src/nexbanner-gam.js">
+          </label>
+          <label>
+            API Base URL
+            <input id="apiBase" value="https://api.nexbanner.com">
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <p>Demand</p>
+          <h2>Add Demand Endpoint</h2>
+        </div>
+
+        <form id="demandForm" class="demand-form">
+          <label>
+            Demand Name
+            <input id="demandName" placeholder="Example: Premium VAST Partner" required>
+          </label>
+          <label>
+            Type
+            <select id="demandType">
+              <option value="vast">VAST Video</option>
+              <option value="display">Display JSON</option>
+              <option value="ortb">ORTB Fallback</option>
+            </select>
+          </label>
+          <label>
+            Endpoint / VAST Tag URL
+            <input id="demandEndpoint" placeholder="https://partner.com/vast?pub=123" required>
+          </label>
+          <label>
+            Floor CPM
+            <input id="floorCpm" value="0.10" inputmode="decimal">
+          </label>
+          <label>
+            Timeout MS
+            <input id="timeoutMs" value="800" inputmode="numeric">
+          </label>
+          <button type="submit">Add Endpoint</button>
+        </form>
+
+        <div class="demand-list" id="demandList"></div>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="section-title">
+          <p>Publisher Output</p>
+          <h2>Generated GAM Creative Tag</h2>
+        </div>
+
+        <div class="actions">
+          <button id="generateTag">Generate Tag</button>
+          <button id="copyTag" class="secondary">Copy Tag</button>
+        </div>
+
+        <textarea id="tagOutput" spellcheck="false"></textarea>
+      </section>
+
+      <section class="panel preview-panel">
+        <div class="section-title">
+          <p>Preview</p>
+          <h2>300x250 Slot</h2>
+        </div>
+        <div class="slot-preview">
+          <span class="logo">N</span>
+          <div>
+            <strong>Video First</strong>
+            <small>VAST -> Display -> ORTB</small>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

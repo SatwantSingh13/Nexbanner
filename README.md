@@ -20,6 +20,7 @@ GAM serves NexBanner creative script
 - `src/nexbanner-player.js` - video-first player and fallback logic
 - `demo/index.html` - local demo page
 - `demo/beta.html` - beta product demo using API endpoints
+- `dashboard/` - browser dashboard for adding endpoints and generating publisher tags
 - `examples/gam-creative.html` - copy/paste GAM creative example
 - `assets/` - demo display and VAST assets
 - `docs/technical-blueprint.md` - product and integration notes
