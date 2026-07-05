@@ -21,12 +21,14 @@
     demandEndpoint: document.getElementById("demandEndpoint"),
     floorCpm: document.getElementById("floorCpm"),
     timeoutMs: document.getElementById("timeoutMs"),
+    demandNotice: document.getElementById("demandNotice"),
     demandList: document.getElementById("demandList"),
     displayTagForm: document.getElementById("displayTagForm"),
     displayTagName: document.getElementById("displayTagName"),
     displayTagUrl: document.getElementById("displayTagUrl"),
     displayTagFloor: document.getElementById("displayTagFloor"),
     displayTagTimeout: document.getElementById("displayTagTimeout"),
+    displayTagNotice: document.getElementById("displayTagNotice"),
     displayTagList: document.getElementById("displayTagList"),
     prebidForm: document.getElementById("prebidForm"),
     prebidName: document.getElementById("prebidName"),
@@ -34,6 +36,7 @@
     prebidParams: document.getElementById("prebidParams"),
     prebidFloor: document.getElementById("prebidFloor"),
     prebidTimeout: document.getElementById("prebidTimeout"),
+    prebidNotice: document.getElementById("prebidNotice"),
     prebidList: document.getElementById("prebidList"),
     adserverForm: document.getElementById("adserverForm"),
     adserverName: document.getElementById("adserverName"),
@@ -42,6 +45,7 @@
     adserverUrl: document.getElementById("adserverUrl"),
     adserverFloor: document.getElementById("adserverFloor"),
     adserverTimeout: document.getElementById("adserverTimeout"),
+    adserverNotice: document.getElementById("adserverNotice"),
     adserverList: document.getElementById("adserverList"),
     tagOutput: document.getElementById("tagOutput"),
     generateTag: document.getElementById("generateTag"),
@@ -58,9 +62,10 @@
 
   els.demandForm.addEventListener("submit", function (event) {
     event.preventDefault();
+    var addedName = els.demandName.value.trim();
     state.demand.push({
       id: String(Date.now()) + Math.floor(Math.random() * 10000),
-      name: els.demandName.value.trim(),
+      name: addedName,
       type: els.demandType.value,
       endpoint: els.demandEndpoint.value.trim(),
       floorCpm: els.floorCpm.value.trim(),
@@ -70,15 +75,17 @@
     els.floorCpm.value = "0.10";
     els.timeoutMs.value = "800";
     saveFromForm();
+    showNotice(els.demandNotice, addedName + " has been added.");
     renderDemand();
     generateTag();
   });
 
   els.displayTagForm.addEventListener("submit", function (event) {
     event.preventDefault();
+    var addedName = els.displayTagName.value.trim();
     state.displayTags.push({
       id: String(Date.now()) + Math.floor(Math.random() * 10000),
-      name: els.displayTagName.value.trim(),
+      name: addedName,
       endpoint: els.displayTagUrl.value.trim(),
       floorCpm: els.displayTagFloor.value.trim(),
       timeoutMs: els.displayTagTimeout.value.trim()
@@ -87,15 +94,17 @@
     els.displayTagFloor.value = "0.10";
     els.displayTagTimeout.value = "800";
     saveFromForm();
+    showNotice(els.displayTagNotice, addedName + " has been added.");
     renderDisplayTags();
     generateTag();
   });
 
   els.prebidForm.addEventListener("submit", function (event) {
     event.preventDefault();
+    var addedName = els.prebidName.value.trim();
     state.prebid.push({
       id: String(Date.now()) + Math.floor(Math.random() * 10000),
-      name: els.prebidName.value.trim(),
+      name: addedName,
       endpoint: els.prebidEndpoint.value.trim(),
       params: els.prebidParams.value.trim(),
       floorCpm: els.prebidFloor.value.trim(),
@@ -105,15 +114,17 @@
     els.prebidFloor.value = "0.20";
     els.prebidTimeout.value = "900";
     saveFromForm();
+    showNotice(els.prebidNotice, addedName + " has been added.");
     renderPrebid();
     generateTag();
   });
 
   els.adserverForm.addEventListener("submit", function (event) {
     event.preventDefault();
+    var addedName = els.adserverName.value.trim();
     state.adserverTags.push({
       id: String(Date.now()) + Math.floor(Math.random() * 10000),
-      name: els.adserverName.value.trim(),
+      name: addedName,
       tagType: els.adserverTagType.value,
       html: els.adserverHtml.value.trim(),
       endpoint: els.adserverUrl.value.trim(),
@@ -124,6 +135,7 @@
     els.adserverFloor.value = "0.10";
     els.adserverTimeout.value = "900";
     saveFromForm();
+    showNotice(els.adserverNotice, addedName + " has been added.");
     renderAdserverTags();
     generateTag();
   });
@@ -438,5 +450,10 @@
       "<small>Floor $" + escapeHtml(item.floorCpm || "0") + " CPM, timeout " + escapeHtml(item.timeoutMs || "800") + "ms</small>"
     ].join("");
     return node;
+  }
+
+  function showNotice(node, message) {
+    node.textContent = message;
+    node.classList.add("show");
   }
 })();
