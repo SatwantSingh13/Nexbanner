@@ -22,6 +22,9 @@
     return {
       publisherId: data.publisherId || "",
       placementId: data.placementId || "",
+      configId: data.configId || "",
+      configEndpoint: data.configEndpoint || "",
+      apiBase: data.apiBase || "https://nexbid.uk",
       target: data.target || "",
       width: numberOr(data.width, 300),
       height: numberOr(data.height, 250),

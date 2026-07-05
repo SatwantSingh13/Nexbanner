@@ -51,6 +51,8 @@
     adserverList: document.getElementById("adserverList"),
     tagOutput: document.getElementById("tagOutput"),
     generateTag: document.getElementById("generateTag"),
+    saveConfig: document.getElementById("saveConfig"),
+    generateShortTag: document.getElementById("generateShortTag"),
     copyTag: document.getElementById("copyTag"),
     exportConfig: document.getElementById("exportConfig")
   };
@@ -157,6 +159,8 @@
   });
 
   els.generateTag.addEventListener("click", generateTag);
+  els.saveConfig.addEventListener("click", saveFinalConfig);
+  els.generateShortTag.addEventListener("click", generateShortTag);
 
   els.copyTag.addEventListener("click", function () {
     els.tagOutput.select();
@@ -341,6 +345,45 @@
     els.tagOutput.value = lines.join("\n");
   }
 
+  function generateShortTag() {
+    var config = buildConfig();
+    var configId = state.configId || "SAVE-CONFIG-FIRST";
+    els.tagOutput.value = [
+      '<script',
+      '  src="' + config.setup.cdnScript + '"',
+      '  data-config-id="' + configId + '"',
+      '  data-api-base="' + trimSlash(config.setup.apiBase) + '">',
+      "</script>"
+    ].join("\n");
+  }
+
+  function saveFinalConfig() {
+    var config = buildConfig();
+    var endpoint = trimSlash(config.setup.apiBase) + "/api/v1/config";
+
+    els.saveConfig.textContent = "Saving...";
+    fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(config)
+    })
+      .then(function (response) {
+        if (!response.ok) throw new Error("save_failed");
+        return response.json();
+      })
+      .then(function (result) {
+        state.configId = result.configId;
+        showNotice(els.demandNotice, "Final config " + result.configId + " has been saved.");
+        els.tagOutput.value = result.tag || "";
+      })
+      .catch(function () {
+        showNotice(els.demandNotice, "Config save failed. Check API/database connection.");
+      })
+      .finally(function () {
+        els.saveConfig.textContent = "Save Final Config";
+      });
+  }
+
   function buildConfig() {
     return {
       setup: {
@@ -354,7 +397,8 @@
       demand: state.demand,
       displayTags: state.displayTags,
       prebid: state.prebid,
-      adserverTags: state.adserverTags
+      adserverTags: state.adserverTags,
+      configId: state.configId || ""
     };
   }
 

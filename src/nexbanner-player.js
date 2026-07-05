@@ -4,9 +4,46 @@
   window.NexBannerPlayer = { mount: mount };
 
   function mount(target, config) {
-    var root = buildShell(target, config);
-    track(config, "load", { layer: "gam-entry" });
-    runVideoFirst(root, config);
+    loadConfig(config)
+      .then(function (resolvedConfig) {
+        var root = buildShell(target, resolvedConfig);
+        track(resolvedConfig, "load", { layer: "gam-entry" });
+        runVideoFirst(root, resolvedConfig);
+      })
+      .catch(function () {
+        var root = buildShell(target, config);
+        track(config, "config_error", { layer: "config" });
+        runVideoFirst(root, config);
+      });
+  }
+
+  function loadConfig(config) {
+    if (!config.configId) return Promise.resolve(config);
+
+    var endpoint = config.configEndpoint ||
+      trimSlash(config.apiBase || "https://nexbid.uk") + "/api/v1/config/" + encodeURIComponent(config.configId);
+
+    return withTimeout(fetch(endpoint, { credentials: "omit" }), config.timeoutMs || 1800)
+      .then(function (response) {
+        if (!response.ok) throw new Error("config-http-" + response.status);
+        return response.json();
+      })
+      .then(function (remoteConfig) {
+        return mergeConfig(config, remoteConfig || {});
+      });
+  }
+
+  function mergeConfig(base, remote) {
+    var merged = {};
+    Object.keys(base || {}).forEach(function (key) { merged[key] = base[key]; });
+    Object.keys(remote || {}).forEach(function (key) {
+      if (remote[key] !== undefined && remote[key] !== null && remote[key] !== "") merged[key] = remote[key];
+    });
+    merged.vastTags = listFrom(merged.vastTags);
+    merged.displayScriptUrls = listFrom(merged.displayScriptUrls);
+    merged.adserverScriptUrls = listFrom(merged.adserverScriptUrls);
+    merged.adserverHtmlTags = listFrom(merged.adserverHtmlTags);
+    return merged;
   }
 
   function runVideoFirst(root, config) {
@@ -487,5 +524,9 @@
 
   function safePageUrl() {
     try { return window.top.location.href; } catch (_) { return window.location.href; }
+  }
+
+  function trimSlash(value) {
+    return String(value || "").replace(/\/+$/, "");
   }
 })();
