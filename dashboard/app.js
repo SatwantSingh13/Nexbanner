@@ -49,6 +49,13 @@
     adserverTimeout: document.getElementById("adserverTimeout"),
     adserverNotice: document.getElementById("adserverNotice"),
     adserverList: document.getElementById("adserverList"),
+    ortbForm: document.getElementById("ortbForm"),
+    ortbName: document.getElementById("ortbName"),
+    ortbEndpoint: document.getElementById("ortbEndpoint"),
+    ortbFloor: document.getElementById("ortbFloor"),
+    ortbTimeout: document.getElementById("ortbTimeout"),
+    ortbNotice: document.getElementById("ortbNotice"),
+    ortbList: document.getElementById("ortbList"),
     tagOutput: document.getElementById("tagOutput"),
     generateTag: document.getElementById("generateTag"),
     saveConfig: document.getElementById("saveConfig"),
@@ -62,6 +69,7 @@
   renderDisplayTags();
   renderPrebid();
   renderAdserverTags();
+  renderOrtb();
   generateTag();
 
   els.demandForm.addEventListener("submit", function (event) {
@@ -144,6 +152,26 @@
     generateTag();
   });
 
+  els.ortbForm.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var addedName = els.ortbName.value.trim();
+    state.demand.push({
+      id: String(Date.now()) + Math.floor(Math.random() * 10000),
+      name: addedName,
+      type: "ortb",
+      endpoint: els.ortbEndpoint.value.trim(),
+      floorCpm: els.ortbFloor.value.trim(),
+      timeoutMs: els.ortbTimeout.value.trim()
+    });
+    els.ortbForm.reset();
+    els.ortbFloor.value = "0.05";
+    els.ortbTimeout.value = "700";
+    saveFromForm();
+    showNotice(els.ortbNotice, addedName + " has been added.");
+    renderOrtb();
+    generateTag();
+  });
+
   [
     els.publisherId,
     els.placementId,
@@ -193,7 +221,11 @@
   function renderDemand() {
     els.demandList.innerHTML = "";
 
-    if (!state.demand.length) {
+    var primaryDemand = state.demand.filter(function (item) {
+      return item.type !== "ortb";
+    });
+
+    if (!primaryDemand.length) {
       var empty = document.createElement("p");
       empty.textContent = "No demand endpoints added yet.";
       empty.style.color = "#607083";
@@ -201,7 +233,7 @@
       return;
     }
 
-    state.demand.forEach(function (item) {
+    primaryDemand.forEach(function (item) {
       var node = document.createElement("div");
       node.className = "demand-item";
       node.innerHTML = [
@@ -223,6 +255,32 @@
       });
 
       els.demandList.appendChild(node);
+    });
+  }
+
+  function renderOrtb() {
+    els.ortbList.innerHTML = "";
+
+    var ortbDemand = state.demand.filter(function (item) {
+      return item.type === "ortb";
+    });
+
+    if (!ortbDemand.length) {
+      appendEmpty(els.ortbList, "No ORTB fallback endpoints added yet.");
+      return;
+    }
+
+    ortbDemand.forEach(function (item) {
+      var node = demandNode(item, "ORTB Fallback", item.endpoint);
+      node.querySelector(".remove").addEventListener("click", function () {
+        state.demand = state.demand.filter(function (existing) {
+          return existing.id !== item.id;
+        });
+        saveFromForm();
+        renderOrtb();
+        generateTag();
+      });
+      els.ortbList.appendChild(node);
     });
   }
 

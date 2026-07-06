@@ -199,6 +199,36 @@
         <div class="demand-list" id="adserverList"></div>
       </section>
 
+      <section class="panel">
+        <div class="section-title">
+          <p>Final Fallback</p>
+          <h2>ORTB Ad Exchange Endpoints</h2>
+        </div>
+
+        <form id="ortbForm" class="demand-form">
+          <label>
+            Exchange Name
+            <input id="ortbName" placeholder="Example: NexBid ORTB AdX" required>
+          </label>
+          <label>
+            ORTB Endpoint
+            <input id="ortbEndpoint" placeholder="https://adx.example.com/openrtb2/auction" required>
+          </label>
+          <label>
+            Floor CPM
+            <input id="ortbFloor" value="0.05" inputmode="decimal">
+          </label>
+          <label>
+            Timeout MS
+            <input id="ortbTimeout" value="700" inputmode="numeric">
+          </label>
+          <button type="submit">Add ORTB Endpoint</button>
+        </form>
+        <div class="notice" id="ortbNotice" aria-live="polite"></div>
+
+        <div class="demand-list" id="ortbList"></div>
+      </section>
+
       <section class="panel output-panel">
         <div class="section-title">
           <p>Publisher Output</p>
@@ -231,7 +261,7 @@
     </main>
 
     <script src="./dashboard-auth.js?v=login-1"></script>
-    <script src="./app.js?v=final-1"></script>
+    <script src="./app.js?v=ortb-1"></script>
   </body>
 </html>
 
