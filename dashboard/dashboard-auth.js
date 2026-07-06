@@ -3,7 +3,7 @@
 
   var AUTH_KEY = "nexbid-dashboard-auth";
 
-  if (sessionStorage.getItem(AUTH_KEY) !== "yes") {
+  if (sessionStorage.getItem(AUTH_KEY) !== "yes" && localStorage.getItem(AUTH_KEY) !== "yes") {
     window.location.replace("/#login");
     return;
   }
@@ -14,6 +14,7 @@
 
     logout.addEventListener("click", function () {
       sessionStorage.removeItem(AUTH_KEY);
+      localStorage.removeItem(AUTH_KEY);
       window.location.href = "/#login";
     });
   });
