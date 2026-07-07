@@ -150,7 +150,8 @@ textarea {
   grid-column: span 2;
 }
 
-button {
+button,
+.secondary-link {
   border: 0;
   border-radius: 6px;
   padding: 11px 14px;
@@ -160,9 +161,16 @@ button {
   cursor: pointer;
 }
 
-button.secondary {
+button.secondary,
+.secondary-link {
   background: #eaf1fb;
   color: var(--blue);
+}
+
+.secondary-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .demand-form button {

@@ -21,6 +21,7 @@ GAM serves NexBanner creative script
 - `demo/index.html` - local demo page
 - `demo/beta.html` - beta product demo using API endpoints
 - `dashboard/` - browser dashboard for adding endpoints and generating publisher tags
+- `invoice-generator/` - static NexBid UK invoice generator for Excel uploads and PDF exports
 - `examples/gam-creative.html` - copy/paste GAM creative example
 - `assets/` - demo display and VAST assets
 - `docs/technical-blueprint.md` - product and integration notes
