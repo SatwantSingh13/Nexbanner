@@ -35,12 +35,14 @@
       auctionEndpoint: data.auctionEndpoint || "",
       prebidEndpoint: data.prebidEndpoint || "",
       prebidParams: data.prebidParams || "",
+      prebidDemand: parseJson(data.prebidDemand, []),
       displayEndpoint: data.displayEndpoint || "",
       displayScriptUrl: data.displayScriptUrl || "",
       displayScriptUrls: splitList(data.displayScriptUrls),
       adserverScriptUrls: splitList(data.adserverScriptUrls),
       adserverHtmlTags: splitList(data.adserverHtmlTags),
       ortbEndpoint: data.ortbEndpoint || "",
+      ortbEndpoints: splitList(data.ortbEndpoints),
       displayImageUrl: data.displayImageUrl || "",
       remnantImageUrl: data.remnantImageUrl || "",
       clickUrl: data.clickUrl || "",
@@ -91,5 +93,14 @@
       .split("|")
       .map(function (item) { return item.trim(); })
       .filter(Boolean);
+  }
+
+  function parseJson(value, fallback) {
+    if (!value) return fallback;
+    try {
+      return JSON.parse(decodeURIComponent(value));
+    } catch (_) {
+      return fallback;
+    }
   }
 })();

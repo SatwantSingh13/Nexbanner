@@ -33,8 +33,57 @@ function normalizeConfig(configId, body) {
   const prebid = Array.isArray(body.prebid) ? body.prebid : [];
   const adserverTags = Array.isArray(body.adserverTags) ? body.adserverTags : [];
   const apiBase = trimSlash(setup.apiBase || "https://nexbid.uk");
-  const prebidItem = prebid[0] || {};
   const vastDemand = demand.filter((item) => item.type === "vast").concat(vast);
+  const prebidDemand = prebid.map((item) => ({
+    name: item.name || "",
+    endpoint: endpointOf(item) || `${apiBase}/api/v1/auction`,
+    params: item.params || "",
+    floorCpm: item.floorCpm || "",
+    timeoutMs: item.timeoutMs || "",
+  })).filter((item) => item.endpoint || item.params);
+  const vastDemandItems = vastDemand.map((item) => ({
+    name: item.name || "",
+    endpoint: endpointOf(item),
+    floorCpm: item.floorCpm || "",
+    timeoutMs: item.timeoutMs || "",
+  })).filter((item) => item.endpoint);
+  const displayScriptDemand = displayTags.map((item) => ({
+    name: item.name || "",
+    endpoint: endpointOf(item),
+    floorCpm: item.floorCpm || "",
+    timeoutMs: item.timeoutMs || "",
+  })).filter((item) => item.endpoint);
+  const adserverScriptDemand = adserverTags
+    .filter((item) => item.tagType === "script")
+    .map((item) => ({
+      name: item.name || "",
+      endpoint: endpointOf(item),
+      floorCpm: item.floorCpm || "",
+      timeoutMs: item.timeoutMs || "",
+    }))
+    .filter((item) => item.endpoint);
+  const adserverHtmlDemand = adserverTags
+    .filter((item) => item.tagType === "html")
+    .map((item) => ({
+      name: item.name || "",
+      html: encodeURIComponent(item.html || ""),
+      floorCpm: item.floorCpm || "",
+      timeoutMs: item.timeoutMs || "",
+    }))
+    .filter((item) => item.html);
+  const ortbEndpoints = demand
+    .filter((item) => item.type === "ortb")
+    .map(endpointOf)
+    .filter(Boolean);
+  const ortbDemand = demand
+    .filter((item) => item.type === "ortb")
+    .map((item) => ({
+      name: item.name || "",
+      endpoint: endpointOf(item),
+      floorCpm: item.floorCpm || "",
+      timeoutMs: item.timeoutMs || "",
+    }))
+    .filter((item) => item.endpoint);
 
   return {
     configId,
@@ -43,14 +92,21 @@ function normalizeConfig(configId, body) {
     width: Number(setup.width || 300),
     height: Number(setup.height || 250),
     mode: "video-first",
-    vastTags: vastDemand.map(endpointOf).filter(Boolean),
-    prebidEndpoint: prebidItem.endpoint || `${apiBase}/api/v1/auction`,
-    prebidParams: prebidItem.params || "",
-    displayScriptUrls: displayTags.map(endpointOf).filter(Boolean),
-    adserverScriptUrls: adserverTags.filter((item) => item.tagType === "script").map((item) => item.endpoint).filter(Boolean),
-    adserverHtmlTags: adserverTags.filter((item) => item.tagType === "html").map((item) => encodeURIComponent(item.html || "")).filter(Boolean),
+    vastDemand: vastDemandItems,
+    vastTags: vastDemandItems.map((item) => item.endpoint),
+    prebidDemand,
+    prebidEndpoint: (prebidDemand[0] || {}).endpoint || `${apiBase}/api/v1/auction`,
+    prebidParams: (prebidDemand[0] || {}).params || "",
+    displayScriptDemand,
+    displayScriptUrls: displayScriptDemand.map((item) => item.endpoint),
+    adserverScriptDemand,
+    adserverScriptUrls: adserverScriptDemand.map((item) => item.endpoint),
+    adserverHtmlDemand,
+    adserverHtmlTags: adserverHtmlDemand.map((item) => item.html),
     displayEndpoint: endpointOf(demand.find((item) => item.type === "display") || {}) || "",
-    ortbEndpoint: endpointOf(demand.find((item) => item.type === "ortb") || {}) || `${apiBase}/api/v1/auction`,
+    ortbDemand,
+    ortbEndpoints,
+    ortbEndpoint: ortbEndpoints[0] || `${apiBase}/api/v1/auction`,
     auctionEndpoint: `${apiBase}/api/v1/auction`,
     trackUrl: `${apiBase}/api/v1/track`,
     logoText: "N",
@@ -63,7 +119,7 @@ function endpointOf(item) {
 }
 
 function shortTag(configId, config) {
-  const cdnScript = "https://nexbid.b-cdn.net/nexbanner/final/src/nexbanner-gam.js";
+  const cdnScript = "https://nexbid.uk/nexbanner/final-v2/src/nexbanner-gam.js";
   return `<script src="${cdnScript}" data-config-id="${configId}" data-api-base="https://nexbid.uk"></script>`;
 }
 

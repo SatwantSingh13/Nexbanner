@@ -40,9 +40,16 @@
       if (remote[key] !== undefined && remote[key] !== null && remote[key] !== "") merged[key] = remote[key];
     });
     merged.vastTags = listFrom(merged.vastTags);
+    merged.vastDemand = arrayFrom(merged.vastDemand);
     merged.displayScriptUrls = listFrom(merged.displayScriptUrls);
+    merged.displayScriptDemand = arrayFrom(merged.displayScriptDemand);
     merged.adserverScriptUrls = listFrom(merged.adserverScriptUrls);
+    merged.adserverScriptDemand = arrayFrom(merged.adserverScriptDemand);
     merged.adserverHtmlTags = listFrom(merged.adserverHtmlTags);
+    merged.adserverHtmlDemand = arrayFrom(merged.adserverHtmlDemand);
+    merged.prebidDemand = arrayFrom(merged.prebidDemand);
+    merged.ortbDemand = arrayFrom(merged.ortbDemand);
+    merged.ortbEndpoints = listFrom(merged.ortbEndpoints);
     return merged;
   }
 
@@ -122,8 +129,10 @@
       });
     }
 
-    var vastTags = listFrom(config.vastTags);
+    var vastTags = auctionItems(config.vastDemand, "endpoint").map(function (item) { return item.endpoint; });
+    listFrom(config.vastTags).forEach(function (url) { vastTags.push(url); });
     if (config.vastUrl) vastTags.push(config.vastUrl);
+    vastTags = uniqueList(vastTags);
     if (!vastTags.length) return Promise.reject(new Error("missing-vast-url"));
 
     return tryVastTags(vastTags, config, 0);
@@ -161,28 +170,52 @@
   }
 
   function fetchPrebidDecision(config) {
-    if (config.prebidEndpoint) return jsonEndpoint(config.prebidEndpoint, config, "prebid");
-    if (config.auctionEndpoint && config.prebidParams) return jsonEndpoint(config.auctionEndpoint, config, "prebid");
-    return Promise.reject(new Error("missing-prebid-demand"));
+    var demand = arrayFrom(config.prebidDemand).map(function (item) {
+      return {
+        endpoint: item.endpoint || config.auctionEndpoint,
+        params: item.params || ""
+      };
+    });
+
+    if (config.prebidEndpoint) {
+      demand.push({ endpoint: config.prebidEndpoint, params: config.prebidParams || "" });
+    }
+    if (config.auctionEndpoint && config.prebidParams) {
+      demand.push({ endpoint: config.auctionEndpoint, params: config.prebidParams });
+    }
+
+    demand = auctionItems(demand, "endpoint");
+    if (!demand.length) return Promise.reject(new Error("missing-prebid-demand"));
+    return auctionJsonDemand(demand, config, "prebid");
   }
 
   function fetchAdserverDecision(config) {
-    var scripts = []
-      .concat(listFrom(config.displayScriptUrls))
-      .concat(listFrom(config.adserverScriptUrls));
-    var htmlTags = listFrom(config.adserverHtmlTags);
+    var scripts = auctionItems(config.displayScriptDemand, "endpoint")
+      .concat(auctionItems(config.adserverScriptDemand, "endpoint"));
+    listFrom(config.displayScriptUrls).forEach(function (url) {
+      scripts.push({ endpoint: url, floorCpm: 0 });
+    });
+    listFrom(config.adserverScriptUrls).forEach(function (url) {
+      scripts.push({ endpoint: url, floorCpm: 0 });
+    });
+    scripts = auctionItems(scripts, "endpoint");
+    var htmlTags = auctionItems(config.adserverHtmlDemand, "html");
+    listFrom(config.adserverHtmlTags).forEach(function (html) {
+      htmlTags.push({ html: html, floorCpm: 0 });
+    });
+    htmlTags = auctionItems(htmlTags, "html");
 
     if (config.displayScriptUrl) scripts.unshift(config.displayScriptUrl);
     if (htmlTags.length) {
       return Promise.resolve({
         adType: "adserver-html",
-        html: decodePayload(htmlTags[0]),
+        html: decodePayload(htmlTags[0].html),
         layer: "adserver-html-tag"
       });
     }
     if (!scripts.length) return Promise.reject(new Error("missing-adserver-tags"));
 
-    return tryScriptTags(scripts, 0);
+    return tryScriptTags(scripts.map(function (item) { return item.endpoint || item; }), 0);
   }
 
   function tryScriptTags(scripts, index) {
@@ -217,8 +250,17 @@
   }
 
   function fetchRemnantDecision(config) {
-    if (config.auctionEndpoint) return jsonEndpoint(config.auctionEndpoint, config, "remnant-ortb");
-    if (config.ortbEndpoint) return jsonEndpoint(config.ortbEndpoint, config, "remnant-ortb");
+    var demand = auctionItems(config.ortbDemand, "endpoint");
+    var endpoints = demand.map(function (item) { return item.endpoint; });
+    listFrom(config.ortbEndpoints).forEach(function (endpoint) { endpoints.push(endpoint); });
+    if (config.ortbEndpoint) endpoints.push(config.ortbEndpoint);
+    if (config.auctionEndpoint) endpoints.push(config.auctionEndpoint);
+    endpoints = uniqueList(endpoints);
+    if (endpoints.length) {
+      return auctionJsonDemand(endpoints.map(function (endpoint) {
+        return { endpoint: endpoint, params: "" };
+      }), config, "remnant-ortb");
+    }
     if (!config.remnantImageUrl) return Promise.reject(new Error("missing-remnant-demand"));
     return Promise.resolve({
       adType: "display",
@@ -228,7 +270,30 @@
     });
   }
 
-  function jsonEndpoint(endpoint, config, layer) {
+  function auctionJsonDemand(demand, config, layer) {
+    var bids = demand.map(function (item) {
+      return jsonEndpoint(item.endpoint, config, layer, item.params)
+        .then(function (ad) {
+          ad.nbxEndpoint = item.endpoint;
+          ad.nbxRankCpm = numberValue(ad.cpm, item.floorCpm);
+          return ad;
+        })
+        .catch(function (error) {
+          track(config, layer + "_endpoint_failed", { layer: layer, reason: error.message });
+          return null;
+        });
+    });
+
+    return Promise.all(bids).then(function (ads) {
+      var winners = ads.filter(Boolean).sort(function (a, b) {
+        return numberValue(b.nbxRankCpm, 0) - numberValue(a.nbxRankCpm, 0);
+      });
+      if (!winners.length) throw new Error("all-" + layer + "-no-fill");
+      return winners[0];
+    });
+  }
+
+  function jsonEndpoint(endpoint, config, layer, prebidParams) {
     var url = new URL(endpoint, window.location.href);
     url.searchParams.set("publisher_id", config.publisherId);
     url.searchParams.set("placement_id", config.placementId);
@@ -237,7 +302,9 @@
     url.searchParams.set("cb", config.cachebuster);
     url.searchParams.set("layer", layer);
     url.searchParams.set("page", safePageUrl());
-    if (layer === "prebid" && config.prebidParams) url.searchParams.set("prebid_params", config.prebidParams);
+    if (layer === "prebid" && (prebidParams || config.prebidParams)) {
+      url.searchParams.set("prebid_params", prebidParams || config.prebidParams);
+    }
 
     return withTimeout(fetch(url.toString(), { credentials: "omit" }), config.timeoutMs)
       .then(function (response) {
@@ -505,6 +572,39 @@
       .split("|")
       .map(function (item) { return item.trim(); })
       .filter(Boolean);
+  }
+
+  function arrayFrom(value) {
+    return Array.isArray(value) ? value.filter(Boolean) : [];
+  }
+
+  function uniqueList(value) {
+    var seen = {};
+    return listFrom(value).filter(function (item) {
+      if (seen[item]) return false;
+      seen[item] = true;
+      return true;
+    });
+  }
+
+  function auctionItems(items, endpointKey) {
+    var seen = {};
+    return arrayFrom(items)
+      .filter(function (item) {
+        return item && item[endpointKey] && !seen[item[endpointKey]];
+      })
+      .map(function (item) {
+        seen[item[endpointKey]] = true;
+        return item;
+      })
+      .sort(function (a, b) {
+        return numberValue(b.floorCpm, 0) - numberValue(a.floorCpm, 0);
+      });
+  }
+
+  function numberValue(value, fallback) {
+    var parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
   }
 
   function escapeAttribute(value) {

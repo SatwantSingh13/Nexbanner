@@ -372,7 +372,14 @@
     var adserverTags = endpointsFrom(state.adserverTags);
     var adserverHtmlTags = htmlTagsFrom(state.adserverTags);
     var prebid = state.prebid[0] || null;
-    var ortb = firstEndpoint("ortb");
+    var prebidDemand = state.prebid.map(function (item) {
+      return {
+        name: item.name || "",
+        endpoint: item.endpoint || "",
+        params: item.params || ""
+      };
+    });
+    var ortbEndpoints = endpointsFor("ortb");
     var apiBase = trimSlash(config.setup.apiBase);
 
     var lines = [
@@ -390,11 +397,12 @@
       '  data-track-url="' + apiBase + "/api/v1/track" + '"',
       prebid && prebid.endpoint ? '  data-prebid-endpoint="' + prebid.endpoint + '"' : "",
       prebid && prebid.params ? '  data-prebid-params="' + encodeAttribute(prebid.params) + '"' : "",
+      prebidDemand.length ? '  data-prebid-demand="' + encodeAttribute(encodeURIComponent(JSON.stringify(prebidDemand))) + '"' : "",
       displayJsTags.length ? '  data-display-script-urls="' + displayJsTags.join("|") + '"' : "",
       adserverTags.length ? '  data-adserver-script-urls="' + adserverTags.join("|") + '"' : "",
       adserverHtmlTags.length ? '  data-adserver-html-tags="' + adserverHtmlTags.join("|") + '"' : "",
       display ? '  data-display-endpoint="' + display.endpoint + '"' : "",
-      ortb ? '  data-ortb-endpoint="' + ortb.endpoint + '"' : "",
+      ortbEndpoints.length ? '  data-ortb-endpoints="' + ortbEndpoints.join("|") + '"' : "",
       '  data-logo-text="N"',
       '  data-click-url="https://nexbid.uk">',
       "</script>"
