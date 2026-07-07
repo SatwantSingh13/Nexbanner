@@ -27,6 +27,7 @@ export async function onRequestPost(context) {
 
 function normalizeConfig(configId, body) {
   const setup = body.setup || {};
+  const productVersion = body.productVersion || "Version 1";
   const demand = Array.isArray(body.demand) ? body.demand : [];
   const vast = Array.isArray(body.vast) ? body.vast : [];
   const displayTags = Array.isArray(body.displayTags) ? body.displayTags : [];
@@ -87,7 +88,8 @@ function normalizeConfig(configId, body) {
 
   return {
     configId,
-    productVersion: "Version 1",
+    productVersion,
+    rotationMode: body.rotationMode || "version-1-viewable-rotation",
     publisherId: setup.publisherId || "",
     placementId: setup.placementId || "",
     width: Number(setup.width || 300),
@@ -121,7 +123,9 @@ function endpointOf(item) {
 }
 
 function shortTag(configId, config) {
-  const cdnScript = "https://nexbid.uk/nexbanner/final/src/nexbanner-gam.js";
+  const cdnScript = config.productVersion === "Version 2 Testing"
+    ? "https://nexbid.uk/nexbanner/version-2-testing/src/nexbanner-gam.js"
+    : "https://nexbid.uk/nexbanner/final/src/nexbanner-gam.js";
   return `<script src="${cdnScript}" data-config-id="${configId}" data-api-base="https://nexbid.uk"></script>`;
 }
 

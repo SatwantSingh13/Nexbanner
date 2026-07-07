@@ -61,6 +61,10 @@
     saveConfig: document.getElementById("saveConfig"),
     generateShortTag: document.getElementById("generateShortTag"),
     copyTag: document.getElementById("copyTag"),
+    saveConfigV2: document.getElementById("saveConfigV2"),
+    generateShortTagV2: document.getElementById("generateShortTagV2"),
+    copyTagV2: document.getElementById("copyTagV2"),
+    tagOutputV2: document.getElementById("tagOutputV2"),
     exportConfig: document.getElementById("exportConfig")
   };
 
@@ -189,6 +193,8 @@
   els.generateTag.addEventListener("click", generateTag);
   els.saveConfig.addEventListener("click", saveFinalConfig);
   els.generateShortTag.addEventListener("click", generateShortTag);
+  els.saveConfigV2.addEventListener("click", saveVersion2Config);
+  els.generateShortTagV2.addEventListener("click", generateShortTagV2);
 
   els.copyTag.addEventListener("click", function () {
     els.tagOutput.select();
@@ -196,6 +202,15 @@
     els.copyTag.textContent = "Copied";
     setTimeout(function () {
       els.copyTag.textContent = "Copy Tag";
+    }, 1200);
+  });
+
+  els.copyTagV2.addEventListener("click", function () {
+    els.tagOutputV2.select();
+    document.execCommand("copy");
+    els.copyTagV2.textContent = "Copied";
+    setTimeout(function () {
+      els.copyTagV2.textContent = "Copy Version 2 Tag";
     }, 1200);
   });
 
@@ -423,6 +438,18 @@
     ].join("\n");
   }
 
+  function generateShortTagV2() {
+    var config = buildVersion2Config();
+    var configId = state.configIdV2 || "SAVE-VERSION-2-FIRST";
+    els.tagOutputV2.value = [
+      '<script',
+      '  src="' + config.setup.cdnScript + '"',
+      '  data-config-id="' + configId + '"',
+      '  data-api-base="' + trimSlash(config.setup.apiBase) + '">',
+      "</script>"
+    ].join("\n");
+  }
+
   function saveFinalConfig() {
     var config = buildConfig();
     var endpoint = trimSlash(config.setup.apiBase) + "/api/v1/config";
@@ -450,6 +477,33 @@
       });
   }
 
+  function saveVersion2Config() {
+    var config = buildVersion2Config();
+    var endpoint = trimSlash(config.setup.apiBase) + "/api/v1/config";
+
+    els.saveConfigV2.textContent = "Saving...";
+    fetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(config)
+    })
+      .then(function (response) {
+        if (!response.ok) throw new Error("save_failed");
+        return response.json();
+      })
+      .then(function (result) {
+        state.configIdV2 = result.configId;
+        showNotice(els.demandNotice, "Version 2 Testing config " + result.configId + " has been saved.");
+        els.tagOutputV2.value = result.tag || "";
+      })
+      .catch(function () {
+        showNotice(els.demandNotice, "Version 2 config save failed. Check API/database connection.");
+      })
+      .finally(function () {
+        els.saveConfigV2.textContent = "Save Version 2 Testing Config";
+      });
+  }
+
   function buildConfig() {
     return {
       setup: {
@@ -466,6 +520,15 @@
       adserverTags: state.adserverTags,
       configId: state.configId || ""
     };
+  }
+
+  function buildVersion2Config() {
+    var config = buildConfig();
+    config.productVersion = "Version 2 Testing";
+    config.rotationMode = "realtime-viewable-bidding";
+    config.setup.cdnScript = "https://nexbid.uk/nexbanner/version-2-testing/src/nexbanner-gam.js";
+    config.rotationMs = 10000;
+    return config;
   }
 
   function saveFromForm() {

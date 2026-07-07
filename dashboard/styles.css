@@ -245,6 +245,18 @@ button.secondary,
   margin-bottom: 14px;
 }
 
+.version-panel {
+  border-color: #9cc4ff;
+  background: #f7fbff;
+}
+
+.version-copy {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
 .slot-preview {
   width: 300px;
   height: 250px;
