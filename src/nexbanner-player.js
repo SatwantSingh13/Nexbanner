@@ -8,12 +8,12 @@
       .then(function (resolvedConfig) {
         var root = buildShell(target, resolvedConfig);
         track(resolvedConfig, "load", { layer: "gam-entry" });
-        runVideoFirst(root, resolvedConfig);
+        startViewableRotation(root, resolvedConfig);
       })
       .catch(function () {
         var root = buildShell(target, config);
         track(config, "config_error", { layer: "config" });
-        runVideoFirst(root, config);
+        startViewableRotation(root, config);
       });
   }
 
@@ -51,6 +51,130 @@
     merged.ortbDemand = arrayFrom(merged.ortbDemand);
     merged.ortbEndpoints = listFrom(merged.ortbEndpoints);
     return merged;
+  }
+
+  function startViewableRotation(root, config) {
+    var state = {
+      active: false,
+      visible: false,
+      timer: null,
+      currentLayer: "",
+      durationMs: numberValue(config.rotationMs, 10000)
+    };
+    root.__nbxRotation = state;
+
+    state.advance = function (reason) {
+      if (reason) track(config, "rotation_advance", { layer: state.currentLayer, reason: reason });
+      clearTimer(state);
+      state.nextIndex = (state.nextIndex || 0) + 1;
+      runRotationStep(root, config, state, state.nextIndex);
+    };
+
+    function start() {
+      if (state.active) return;
+      state.active = true;
+      state.visible = true;
+      state.nextIndex = 0;
+      track(config, "viewable_start", { layer: "viewability" });
+      runRotationStep(root, config, state, 0);
+    }
+
+    function pause() {
+      if (!state.active) return;
+      state.active = false;
+      state.visible = false;
+      clearTimer(state);
+      track(config, "viewable_pause", { layer: "viewability" });
+    }
+
+    if (!("IntersectionObserver" in window)) {
+      start();
+      return;
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+      var entry = entries[0];
+      if (entry && entry.isIntersecting && entry.intersectionRatio >= 0.5) start();
+      else pause();
+    }, { threshold: [0, 0.5, 1] });
+
+    observer.observe(root);
+    setStatus(root, "Waiting for viewable area");
+  }
+
+  function runRotationStep(root, config, state, index) {
+    if (!state.active) return;
+
+    var layers = [
+      {
+        name: "vast",
+        status: "Running VAST auction",
+        noFill: "video_no_fill",
+        fetch: function () { return fetchVast(config); },
+        render: function (vast, done) { renderVideo(root, config, vast, done); },
+        waitForDone: true
+      },
+      {
+        name: "prebid",
+        status: "Running Prebid auction",
+        noFill: "prebid_no_fill",
+        fetch: function () { return fetchPrebidDecision(config); },
+        render: function (ad) { renderDisplay(root, config, ad); }
+      },
+      {
+        name: "adserver",
+        status: "Running GAM / MI / JS layer",
+        noFill: "adserver_no_fill",
+        fetch: function () { return fetchAdserverDecision(config); },
+        render: function (ad) { renderDisplay(root, config, ad); }
+      },
+      {
+        name: "ortb",
+        status: "Running ORTB fallback auction",
+        noFill: "final_no_fill",
+        fetch: function () { return fetchRemnantDecision(config); },
+        render: function (ad) { renderDisplay(root, config, ad); }
+      }
+    ];
+
+    if (index >= layers.length) {
+      track(config, "rotation_cycle_complete", { layer: "rotation" });
+      state.nextIndex = 0;
+      state.timer = window.setTimeout(function () {
+        runRotationStep(root, config, state, 0);
+      }, 300);
+      return;
+    }
+
+    var layer = layers[index];
+    state.currentLayer = layer.name;
+    state.nextIndex = index;
+    setStatus(root, layer.status);
+
+    layer.fetch()
+      .then(function (ad) {
+        if (!state.active) return;
+        if (!ad) throw new Error("empty-" + layer.name);
+        layer.render(ad, function () {
+          if (!state.active) return;
+          runRotationStep(root, config, state, index + 1);
+        });
+        track(config, "rotation_layer_filled", { layer: layer.name, cpm: ad.cpm || ad.nbxRankCpm || "" });
+        if (layer.waitForDone) return;
+        state.timer = window.setTimeout(function () {
+          runRotationStep(root, config, state, index + 1);
+        }, state.durationMs);
+      })
+      .catch(function (error) {
+        if (!state.active) return;
+        track(config, layer.noFill, { layer: layer.name, reason: error.message });
+        runRotationStep(root, config, state, index + 1);
+      });
+  }
+
+  function clearTimer(state) {
+    if (state.timer) window.clearTimeout(state.timer);
+    state.timer = null;
   }
 
   function runVideoFirst(root, config) {
@@ -318,7 +442,7 @@
       });
   }
 
-  function renderVideo(root, config, vast) {
+  function renderVideo(root, config, vast, onDone) {
     clear(root);
     track(config, "impression", { layer: vast.layer });
     pixel(vast.impressionUrl);
@@ -352,10 +476,13 @@
       if (ratio >= 0.5) fireOnce(fired, "midpoint", vast, config);
       if (ratio >= 0.75) fireOnce(fired, "thirdQuartile", vast, config);
     });
-    video.addEventListener("ended", function () { fireOnce(fired, "complete", vast, config); });
+    video.addEventListener("ended", function () {
+      fireOnce(fired, "complete", vast, config);
+      if (typeof onDone === "function") onDone();
+    });
     video.addEventListener("error", function () {
       track(config, "video_error", { layer: vast.layer });
-      runDisplay(root, config);
+      advanceRotation(root, "video_error");
     });
 
     link.appendChild(video);
@@ -367,7 +494,7 @@
     if (playResult && typeof playResult.catch === "function") {
       playResult.catch(function () {
         track(config, "autoplay_blocked", { layer: vast.layer });
-        runDisplay(root, config);
+        advanceRotation(root, "autoplay_blocked");
       });
     }
   }
@@ -412,8 +539,7 @@
     image.className = "nbx-image";
     image.onerror = function () {
       track(config, "display_error", { layer: ad.layer || "display" });
-      if ((ad.layer || "").indexOf("remnant") === -1) runRemnant(root, config);
-      else renderNoAd(root, config);
+      advanceRotation(root, "display_error");
     };
 
     link.appendChild(image);
@@ -451,6 +577,12 @@
     clear(root);
     root.className += " nbx-empty";
     track(config, "no_ad", { layer: "empty" });
+  }
+
+  function advanceRotation(root, reason) {
+    if (root.__nbxRotation && typeof root.__nbxRotation.advance === "function") {
+      root.__nbxRotation.advance(reason);
+    }
   }
 
   function buildShell(target, config) {

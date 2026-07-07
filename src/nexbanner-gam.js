@@ -29,6 +29,7 @@
       width: numberOr(data.width, 300),
       height: numberOr(data.height, 250),
       mode: data.mode || "video-first",
+      rotationMs: numberOr(data.rotationMs, 10000),
       vastUrl: data.vastUrl || "",
       vastTags: splitList(data.vastTags),
       videoUrl: data.videoUrl || "",

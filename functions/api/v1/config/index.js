@@ -109,6 +109,7 @@ function normalizeConfig(configId, body) {
     ortbEndpoint: ortbEndpoints[0] || `${apiBase}/api/v1/auction`,
     auctionEndpoint: `${apiBase}/api/v1/auction`,
     trackUrl: `${apiBase}/api/v1/track`,
+    rotationMs: Number(body.rotationMs || setup.rotationMs || 10000),
     logoText: "N",
     clickUrl: "https://nexbid.uk",
   };
@@ -119,7 +120,7 @@ function endpointOf(item) {
 }
 
 function shortTag(configId, config) {
-  const cdnScript = "https://nexbid.uk/nexbanner/final-v2/src/nexbanner-gam.js";
+  const cdnScript = "https://nexbid.uk/nexbanner/final/src/nexbanner-gam.js";
   return `<script src="${cdnScript}" data-config-id="${configId}" data-api-base="https://nexbid.uk"></script>`;
 }
 
