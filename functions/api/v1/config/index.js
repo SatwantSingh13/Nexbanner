@@ -87,6 +87,7 @@ function normalizeConfig(configId, body) {
 
   return {
     configId,
+    productVersion: "Version 1",
     publisherId: setup.publisherId || "",
     placementId: setup.placementId || "",
     width: Number(setup.width || 300),
