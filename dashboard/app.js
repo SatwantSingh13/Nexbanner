@@ -65,8 +65,20 @@
     generateShortTagV2: document.getElementById("generateShortTagV2"),
     copyTagV2: document.getElementById("copyTagV2"),
     tagOutputV2: document.getElementById("tagOutputV2"),
+    reportScope: document.getElementById("reportScope"),
+    reportConfigId: document.getElementById("reportConfigId"),
+    refreshReport: document.getElementById("refreshReport"),
+    autoRefreshReport: document.getElementById("autoRefreshReport"),
+    metricViewable: document.getElementById("metricViewable"),
+    metricDelivered: document.getElementById("metricDelivered"),
+    metricFillRate: document.getElementById("metricFillRate"),
+    metricNoFill: document.getElementById("metricNoFill"),
+    metricImpressions: document.getElementById("metricImpressions"),
+    metricRevenue: document.getElementById("metricRevenue"),
+    reportOutput: document.getElementById("reportOutput"),
     exportConfig: document.getElementById("exportConfig")
   };
+  var reportTimer = null;
 
   hydrate();
   renderDemand();
@@ -195,6 +207,8 @@
   els.generateShortTag.addEventListener("click", generateShortTag);
   els.saveConfigV2.addEventListener("click", saveVersion2Config);
   els.generateShortTagV2.addEventListener("click", generateShortTagV2);
+  els.refreshReport.addEventListener("click", refreshReport);
+  els.autoRefreshReport.addEventListener("click", toggleAutoRefreshReport);
 
   els.copyTag.addEventListener("click", function () {
     els.tagOutput.select();
@@ -531,6 +545,65 @@
     return config;
   }
 
+  function refreshReport() {
+    var config = buildConfig();
+    var url = new URL(trimSlash(config.setup.apiBase) + "/api/v1/report");
+    var scope = els.reportScope.value;
+    var reportConfigId = els.reportConfigId.value.trim();
+
+    if (scope === "publisher") {
+      url.searchParams.set("publisher_id", config.setup.publisherId);
+    } else if (scope === "placement") {
+      url.searchParams.set("publisher_id", config.setup.publisherId);
+      url.searchParams.set("placement_id", config.setup.placementId);
+    } else if (scope === "config" && reportConfigId) {
+      url.searchParams.set("config_id", reportConfigId);
+    }
+
+    els.refreshReport.textContent = "Refreshing...";
+    fetch(url.toString())
+      .then(function (response) {
+        if (!response.ok) throw new Error("report_failed");
+        return response.json();
+      })
+      .then(function (result) {
+        renderReport(result.summary || {});
+        els.reportOutput.value = JSON.stringify(result, null, 2);
+      })
+      .catch(function () {
+        els.reportOutput.value = "Report unavailable. Check NEXBANNER_EVENTS KV binding.";
+      })
+      .finally(function () {
+        els.refreshReport.textContent = "Refresh Report";
+      });
+  }
+
+  function renderReport(summary) {
+    var viewable = numberOr(summary.viewableRequests, 0);
+    var delivered = numberOr(summary.deliveredAds, 0);
+    var fillRate = viewable ? Math.round((delivered / viewable) * 1000) / 10 : 0;
+
+    els.metricViewable.textContent = formatNumber(viewable);
+    els.metricDelivered.textContent = formatNumber(delivered);
+    els.metricFillRate.textContent = fillRate + "%";
+    els.metricNoFill.textContent = formatNumber(numberOr(summary.noFill, 0));
+    els.metricImpressions.textContent = formatNumber(numberOr(summary.impressions, 0));
+    els.metricRevenue.textContent = "$" + numberOr(summary.revenueEstimate, 0).toFixed(4);
+  }
+
+  function toggleAutoRefreshReport() {
+    if (reportTimer) {
+      clearInterval(reportTimer);
+      reportTimer = null;
+      els.autoRefreshReport.textContent = "Auto Refresh Off";
+      return;
+    }
+
+    refreshReport();
+    reportTimer = setInterval(refreshReport, 5000);
+    els.autoRefreshReport.textContent = "Auto Refresh On";
+  }
+
   function saveFromForm() {
     state.setup = buildConfig().setup;
     state.setup = buildConfig().setup;
@@ -581,6 +654,15 @@
 
   function trimSlash(value) {
     return (value || "").replace(/\/+$/, "");
+  }
+
+  function numberOr(value, fallback) {
+    var parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function formatNumber(value) {
+    return String(Math.round(numberOr(value, 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
 
   function escapeHtml(value) {

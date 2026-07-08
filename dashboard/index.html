@@ -265,6 +265,45 @@
         <textarea id="tagOutputV2" spellcheck="false" placeholder="Version 2 Testing publisher tag will appear here."></textarea>
       </section>
 
+      <section class="panel output-panel">
+        <div class="section-title">
+          <p>Testing Reports</p>
+          <h2>Realtime KV Counters</h2>
+        </div>
+
+        <div class="form-grid">
+          <label>
+            Report Scope
+            <select id="reportScope">
+              <option value="all">All Traffic Today</option>
+              <option value="publisher">Current Publisher ID</option>
+              <option value="placement">Current Publisher + Placement</option>
+              <option value="config">Config ID</option>
+            </select>
+          </label>
+          <label>
+            Config ID
+            <input id="reportConfigId" placeholder="Optional config ID">
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="refreshReport" class="secondary">Refresh Report</button>
+          <button id="autoRefreshReport" class="secondary">Auto Refresh Off</button>
+        </div>
+
+        <div class="report-grid">
+          <div><strong id="metricViewable">0</strong><span>Viewable Requests</span></div>
+          <div><strong id="metricDelivered">0</strong><span>Delivered Ads</span></div>
+          <div><strong id="metricFillRate">0%</strong><span>Fill Rate</span></div>
+          <div><strong id="metricNoFill">0</strong><span>No Fill</span></div>
+          <div><strong id="metricImpressions">0</strong><span>Impressions</span></div>
+          <div><strong id="metricRevenue">$0.0000</strong><span>Est. Revenue</span></div>
+        </div>
+
+        <textarea id="reportOutput" spellcheck="false" readonly></textarea>
+      </section>
+
       <section class="panel preview-panel">
         <div class="section-title">
           <p>Preview</p>

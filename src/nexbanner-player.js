@@ -677,6 +677,9 @@
 
     var url = new URL(endpoint, window.location.href);
     url.searchParams.set("event", eventName);
+    url.searchParams.set("config_id", config.configId || "");
+    url.searchParams.set("product_version", config.productVersion || "");
+    url.searchParams.set("rotation_mode", config.rotationMode || "");
     url.searchParams.set("publisher_id", config.publisherId);
     url.searchParams.set("placement_id", config.placementId);
     url.searchParams.set("layer", payload.layer || "");
