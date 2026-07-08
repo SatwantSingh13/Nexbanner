@@ -5,7 +5,7 @@ export async function onRequestOptions() {
 export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
-    const configId = body.configId || makeConfigId();
+    const configId = body.configId || domainConfigId(body) || makeConfigId();
     const config = normalizeConfig(configId, body);
 
     const store = context.env.NEXBANNER_CONFIGS;
@@ -146,6 +146,20 @@ function escapeAttr(value) {
 
 function makeConfigId() {
   return `NBX-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 10000)}`;
+}
+
+function domainConfigId(body) {
+  const setup = body.setup || {};
+  const domain = String(setup.publisherDomain || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/.*$/, "");
+
+  if (!domain) return "";
+  if (body.productVersion === "Version 2 Testing") return `${domain}-version-2-testing`;
+  return domain;
 }
 
 function json(body, status = 200) {

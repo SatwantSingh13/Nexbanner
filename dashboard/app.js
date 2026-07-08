@@ -445,7 +445,7 @@
 
   function generateShortTag() {
     var config = buildConfig();
-    var configId = state.configId || "SAVE-CONFIG-FIRST";
+    var configId = config.configId || "SAVE-CONFIG-FIRST";
     els.tagOutput.value = [
       '<script',
       '  src="' + config.setup.cdnScript + '"',
@@ -457,7 +457,7 @@
 
   function generateShortTagV2() {
     var config = buildVersion2Config();
-    var configId = state.configIdV2 || "SAVE-VERSION-2-FIRST";
+    var configId = config.configId || "SAVE-VERSION-2-FIRST";
     els.tagOutputV2.value = [
       '<script',
       '  src="' + config.setup.cdnScript + '"',
@@ -536,7 +536,7 @@
       displayTags: state.displayTags,
       prebid: state.prebid,
       adserverTags: state.adserverTags,
-      configId: state.configId || ""
+      configId: domainConfigId(els.publisherDomain.value.trim(), "Version 1")
     };
   }
 
@@ -546,6 +546,7 @@
     config.rotationMode = "realtime-viewable-bidding";
     config.setup.cdnScript = "https://nexbid.uk/nexbanner/version-2-testing/src/nexbanner-gam.js";
     config.rotationMs = 10000;
+    config.configId = domainConfigId(config.setup.publisherDomain, "Version 2 Testing");
     return config;
   }
 
@@ -660,6 +661,19 @@
 
   function trimSlash(value) {
     return (value || "").replace(/\/+$/, "");
+  }
+
+  function domainConfigId(domain, version) {
+    var cleanDomain = String(domain || "")
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .replace(/\/.*$/, "");
+
+    if (!cleanDomain) return "";
+    if (version === "Version 2 Testing") return cleanDomain + "-version-2-testing";
+    return cleanDomain;
   }
 
   function numberOr(value, fallback) {
