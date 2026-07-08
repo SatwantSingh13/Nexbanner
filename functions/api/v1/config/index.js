@@ -28,6 +28,11 @@ export async function onRequestPost(context) {
 function normalizeConfig(configId, body) {
   const setup = body.setup || {};
   const productVersion = body.productVersion || "Version 1";
+  const fallbackImageUrl = body.remnantImageUrl
+    || body.displayImageUrl
+    || setup.remnantImageUrl
+    || setup.displayImageUrl
+    || "https://nexbid.b-cdn.net/assets/nexbid-test-display-300x250.png";
   const demand = Array.isArray(body.demand) ? body.demand : [];
   const vast = Array.isArray(body.vast) ? body.vast : [];
   const displayTags = Array.isArray(body.displayTags) ? body.displayTags : [];
@@ -114,6 +119,8 @@ function normalizeConfig(configId, body) {
     auctionEndpoint: `${apiBase}/api/v1/auction`,
     trackUrl: `${apiBase}/api/v1/track`,
     rotationMs: Number(body.rotationMs || setup.rotationMs || 10000),
+    displayImageUrl: body.displayImageUrl || setup.displayImageUrl || "",
+    remnantImageUrl: fallbackImageUrl,
     logoText: "N",
     clickUrl: "https://nexbid.uk",
   };

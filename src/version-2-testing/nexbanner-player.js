@@ -383,7 +383,16 @@
     if (endpoints.length) {
       return auctionJsonDemand(endpoints.map(function (endpoint) {
         return { endpoint: endpoint, params: "" };
-      }), config, "remnant-ortb");
+      }), config, "remnant-ortb").catch(function (error) {
+        if (!config.remnantImageUrl) throw error;
+        track(config, "remnant_auction_no_fill", { layer: "remnant-ortb", reason: error.message });
+        return {
+          adType: "display",
+          imageUrl: config.remnantImageUrl,
+          clickUrl: config.clickUrl,
+          layer: "remnant-house"
+        };
+      });
     }
     if (!config.remnantImageUrl) return Promise.reject(new Error("missing-remnant-demand"));
     return Promise.resolve({
