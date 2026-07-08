@@ -12,6 +12,7 @@
 
   var els = {
     publisherId: document.getElementById("publisherId"),
+    publisherDomain: document.getElementById("publisherDomain"),
     placementId: document.getElementById("placementId"),
     width: document.getElementById("width"),
     height: document.getElementById("height"),
@@ -190,6 +191,7 @@
 
   [
     els.publisherId,
+    els.publisherDomain,
     els.placementId,
     els.width,
     els.height,
@@ -417,6 +419,7 @@
       '  src="' + config.setup.cdnScript + '"',
       '  data-target="nexbanner-slot-%%CACHEBUSTER%%"',
       '  data-publisher-id="' + config.setup.publisherId + '"',
+      '  data-publisher-domain="' + config.setup.publisherDomain + '"',
       '  data-placement-id="' + config.setup.placementId + '"',
       '  data-width="' + config.setup.width + '"',
       '  data-height="' + config.setup.height + '"',
@@ -522,6 +525,7 @@
     return {
       setup: {
         publisherId: els.publisherId.value.trim(),
+        publisherDomain: els.publisherDomain.value.trim(),
         placementId: els.placementId.value.trim(),
         width: els.width.value.trim(),
         height: els.height.value.trim(),
@@ -553,6 +557,8 @@
 
     if (scope === "publisher") {
       url.searchParams.set("publisher_id", config.setup.publisherId);
+    } else if (scope === "domain") {
+      url.searchParams.set("publisher_domain", config.setup.publisherDomain);
     } else if (scope === "placement") {
       url.searchParams.set("publisher_id", config.setup.publisherId);
       url.searchParams.set("placement_id", config.setup.placementId);

@@ -420,6 +420,7 @@
   function jsonEndpoint(endpoint, config, layer, prebidParams) {
     var url = new URL(endpoint, window.location.href);
     url.searchParams.set("publisher_id", config.publisherId);
+    url.searchParams.set("publisher_domain", config.publisherDomain || domainFromPage());
     url.searchParams.set("placement_id", config.placementId);
     url.searchParams.set("w", config.width);
     url.searchParams.set("h", config.height);
@@ -681,6 +682,7 @@
     url.searchParams.set("product_version", config.productVersion || "");
     url.searchParams.set("rotation_mode", config.rotationMode || "");
     url.searchParams.set("publisher_id", config.publisherId);
+    url.searchParams.set("publisher_domain", config.publisherDomain || domainFromPage());
     url.searchParams.set("placement_id", config.placementId);
     url.searchParams.set("layer", payload.layer || "");
     url.searchParams.set("reason", payload.reason || "");
@@ -758,7 +760,11 @@
   }
 
   function safePageUrl() {
-    try { return window.top.location.href; } catch (_) { return window.location.href; }
+    try { return window.top.location.href; } catch (_) { return document.referrer || window.location.href; }
+  }
+
+  function domainFromPage() {
+    try { return new URL(safePageUrl()).hostname; } catch (_) { return ""; }
   }
 
   function trimSlash(value) {

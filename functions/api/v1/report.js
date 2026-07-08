@@ -12,10 +12,12 @@ export async function onRequestGet(context) {
   const date = url.searchParams.get("date") || new Date().toISOString().slice(0, 10);
   const configId = url.searchParams.get("config_id") || "";
   const publisherId = url.searchParams.get("publisher_id") || "";
+  const publisherDomain = url.searchParams.get("publisher_domain") || "";
   const placementId = url.searchParams.get("placement_id") || "";
 
   let key = `summary:${date}:all`;
   if (configId) key = `summary:${date}:config:${configId}`;
+  else if (publisherDomain) key = `summary:${date}:domain:${publisherDomain}`;
   else if (publisherId && placementId) key = `summary:${date}:placement:${publisherId}:${placementId}`;
   else if (publisherId) key = `summary:${date}:publisher:${publisherId}`;
 

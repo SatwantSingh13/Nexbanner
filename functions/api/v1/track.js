@@ -11,6 +11,7 @@ export async function onRequestGet(context) {
     productVersion: url.searchParams.get("product_version") || "",
     rotationMode: url.searchParams.get("rotation_mode") || "",
     publisherId: url.searchParams.get("publisher_id") || "",
+    publisherDomain: url.searchParams.get("publisher_domain") || "",
     placementId: url.searchParams.get("placement_id") || "",
     layer: url.searchParams.get("layer") || "",
     cpm: url.searchParams.get("cpm") || "",
@@ -34,6 +35,7 @@ async function updateCounters(store, event) {
   const keys = [
     `summary:${date}:all`,
     `summary:${date}:publisher:${event.publisherId || "unknown"}`,
+    `summary:${date}:domain:${event.publisherDomain || "unknown"}`,
     `summary:${date}:placement:${event.publisherId || "unknown"}:${event.placementId || "unknown"}`,
   ];
 

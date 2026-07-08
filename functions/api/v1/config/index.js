@@ -91,6 +91,7 @@ function normalizeConfig(configId, body) {
     productVersion,
     rotationMode: body.rotationMode || "version-1-viewable-rotation",
     publisherId: setup.publisherId || "",
+    publisherDomain: setup.publisherDomain || "",
     placementId: setup.placementId || "",
     width: Number(setup.width || 300),
     height: Number(setup.height || 250),

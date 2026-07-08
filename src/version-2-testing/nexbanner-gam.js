@@ -21,6 +21,7 @@
     var data = node.dataset || {};
     return {
       publisherId: data.publisherId || "",
+      publisherDomain: data.publisherDomain || "",
       placementId: data.placementId || "",
       configId: data.configId || "",
       configEndpoint: data.configEndpoint || "",
