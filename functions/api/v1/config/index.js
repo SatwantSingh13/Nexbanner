@@ -127,7 +127,21 @@ function shortTag(configId, config) {
   const cdnScript = config.productVersion === "Version 2 Testing"
     ? "https://nexbid.uk/nexbanner/version-2-testing/src/nexbanner-gam.js"
     : "https://nexbid.uk/nexbanner/final/src/nexbanner-gam.js";
-  return `<script src="${cdnScript}" data-config-id="${configId}" data-api-base="https://nexbid.uk"></script>`;
+  return [
+    `<script src="${cdnScript}"`,
+    `  data-config-id="${configId}"`,
+    `  data-publisher-id="${escapeAttr(config.publisherId || "")}"`,
+    `  data-publisher-domain="${escapeAttr(config.publisherDomain || "")}"`,
+    `  data-placement-id="${escapeAttr(config.placementId || "")}"`,
+    `  data-api-base="https://nexbid.uk"></script>`,
+  ].join("\n");
+}
+
+function escapeAttr(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
 }
 
 function makeConfigId() {
