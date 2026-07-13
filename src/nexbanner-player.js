@@ -1,4 +1,4 @@
-﻿(function () {
+(function () {
   "use strict";
 
   window.NexBannerPlayer = { mount: mount };
@@ -7,6 +7,7 @@
     loadConfig(config)
       .then(function (resolvedConfig) {
         var root = buildShell(target, resolvedConfig);
+        track(resolvedConfig, "ad_request", { layer: "gam-entry" });
         track(resolvedConfig, "load", { layer: "gam-entry" });
         startViewableRotation(root, resolvedConfig);
       })
@@ -55,11 +56,16 @@
 
   function startViewableRotation(root, config) {
     var state = {
-      active: false,
+      active: true,
       visible: false,
       timer: null,
       currentLayer: "",
-      durationMs: numberValue(config.rotationMs, 10000)
+      running: true,
+      pendingRestart: false,
+      durationMs: numberValue(config.rotationMs, 10000),
+      minRenderMs: Math.max(5000, numberValue(config.minRenderMs, 5000)),
+      hasRenderedAd: false,
+      renderStartedAt: 0
     };
     root.__nbxRotation = state;
 
@@ -67,43 +73,52 @@
       if (reason) track(config, "rotation_advance", { layer: state.currentLayer, reason: reason });
       clearTimer(state);
       state.nextIndex = (state.nextIndex || 0) + 1;
-      runRotationStep(root, config, state, state.nextIndex);
+      waitForMinimumRender(state, function () {
+        runRotationStep(root, config, state, state.nextIndex);
+      });
     };
 
-    function start() {
-      if (state.active) return;
-      state.active = true;
+    function markVisible() {
+      if (state.visible) return;
       state.visible = true;
-      state.nextIndex = 0;
       track(config, "viewable_start", { layer: "viewability" });
-      runRotationStep(root, config, state, 0);
+      if (state.pendingRestart && !state.running) {
+        state.pendingRestart = false;
+        state.nextIndex = 0;
+        runRotationStep(root, config, state, 0);
+      }
     }
 
-    function pause() {
-      if (!state.active) return;
-      state.active = false;
+    function markHidden() {
+      if (!state.visible) return;
       state.visible = false;
-      clearTimer(state);
+      if (!state.running) {
+        clearTimer(state);
+        state.pendingRestart = true;
+      }
       track(config, "viewable_pause", { layer: "viewability" });
     }
 
     if (!("IntersectionObserver" in window)) {
-      start();
-      return;
+      state.visible = true;
+    } else {
+      var observer = new IntersectionObserver(function (entries) {
+        var entry = entries[0];
+        if (entry && entry.isIntersecting && entry.intersectionRatio >= 0.5) markVisible();
+        else markHidden();
+      }, { threshold: [0, 0.5, 1] });
+
+      observer.observe(root);
     }
 
-    var observer = new IntersectionObserver(function (entries) {
-      var entry = entries[0];
-      if (entry && entry.isIntersecting && entry.intersectionRatio >= 0.5) start();
-      else pause();
-    }, { threshold: [0, 0.5, 1] });
-
-    observer.observe(root);
-    setStatus(root, "Waiting for viewable area");
+    state.nextIndex = 0;
+    track(config, "waterfall_initial_request", { layer: "vast" });
+    runRotationStep(root, config, state, 0);
   }
 
   function runRotationStep(root, config, state, index) {
     if (!state.active) return;
+    state.running = true;
 
     var layers = [
       {
@@ -126,7 +141,8 @@
         status: "Running GAM / MI / JS layer",
         noFill: "adserver_no_fill",
         fetch: function () { return fetchAdserverDecision(config); },
-        render: function (ad) { renderDisplay(root, config, ad); }
+        render: function (ad) { renderDisplay(root, config, ad); },
+        holdMs: Math.max(30000, numberValue(config.adserverHoldMs, 30000))
       },
       {
         name: "ortb",
@@ -139,17 +155,22 @@
 
     if (index >= layers.length) {
       track(config, "rotation_cycle_complete", { layer: "rotation" });
+      state.running = false;
       state.nextIndex = 0;
-      state.timer = window.setTimeout(function () {
-        runRotationStep(root, config, state, 0);
-      }, 300);
+      if (state.visible) {
+        state.timer = window.setTimeout(function () {
+          runRotationStep(root, config, state, 0);
+        }, 300);
+      } else {
+        state.pendingRestart = true;
+      }
       return;
     }
 
     var layer = layers[index];
     state.currentLayer = layer.name;
     state.nextIndex = index;
-    setStatus(root, layer.status);
+    setStatus(root, layer.status, true);
 
     layer.fetch()
       .then(function (ad) {
@@ -157,13 +178,15 @@
         if (!ad) throw new Error("empty-" + layer.name);
         layer.render(ad, function () {
           if (!state.active) return;
-          runRotationStep(root, config, state, index + 1);
+          waitForMinimumRender(state, function () {
+            runRotationStep(root, config, state, index + 1);
+          });
         });
         track(config, "rotation_layer_filled", { layer: layer.name, cpm: ad.cpm || ad.nbxRankCpm || "" });
         if (layer.waitForDone) return;
         state.timer = window.setTimeout(function () {
           runRotationStep(root, config, state, index + 1);
-        }, state.durationMs);
+        }, holdDuration(layer, state));
       })
       .catch(function (error) {
         if (!state.active) return;
@@ -175,6 +198,28 @@
   function clearTimer(state) {
     if (state.timer) window.clearTimeout(state.timer);
     state.timer = null;
+  }
+
+  function markRenderStart(root) {
+    if (root.__nbxRotation) {
+      root.__nbxRotation.hasRenderedAd = true;
+      root.__nbxRotation.renderStartedAt = Date.now();
+    }
+  }
+
+  function waitForMinimumRender(state, callback) {
+    var elapsed = Date.now() - (state.renderStartedAt || Date.now());
+    var waitMs = Math.max(0, state.minRenderMs - elapsed);
+    if (!waitMs) {
+      callback();
+      return;
+    }
+    clearTimer(state);
+    state.timer = window.setTimeout(callback, waitMs);
+  }
+
+  function holdDuration(layer, state) {
+    return Math.max(numberValue(layer.holdMs, state.durationMs), state.durationMs, state.minRenderMs);
   }
 
   function runVideoFirst(root, config) {
@@ -253,10 +298,12 @@
       });
     }
 
-    var vastTags = auctionItems(config.vastDemand, "endpoint").map(function (item) { return item.endpoint; });
-    listFrom(config.vastTags).forEach(function (url) { vastTags.push(url); });
-    if (config.vastUrl) vastTags.push(config.vastUrl);
-    vastTags = uniqueList(vastTags);
+    var vastTags = auctionItems(config.vastDemand, "endpoint");
+    listFrom(config.vastTags).forEach(function (url) {
+      vastTags.push({ endpoint: url, timeoutMs: config.timeoutMs });
+    });
+    if (config.vastUrl) vastTags.push({ endpoint: config.vastUrl, timeoutMs: config.timeoutMs });
+    vastTags = uniqueDemand(vastTags, "endpoint");
     if (!vastTags.length) return Promise.reject(new Error("missing-vast-url"));
 
     return tryVastTags(vastTags, config, 0);
@@ -264,9 +311,11 @@
 
   function tryVastTags(vastTags, config, index) {
     if (index >= vastTags.length) return Promise.reject(new Error("all-vast-no-fill"));
-    var vastUrl = vastTags[index];
+    var vastItem = vastTags[index];
+    var vastTmax = numberValue(vastItem.timeoutMs, config.timeoutMs || 1800);
+    var vastUrl = expandMacros(vastItem.endpoint || vastItem, config, vastTmax);
 
-    return withTimeout(fetch(vastUrl, { credentials: "omit" }), config.timeoutMs)
+    return withTimeout(fetch(vastUrl, { credentials: "omit" }), vastTmax)
       .then(function (response) {
         if (!response.ok) throw new Error("vast-http-" + response.status);
         return response.text();
@@ -375,14 +424,16 @@
 
   function fetchRemnantDecision(config) {
     var demand = auctionItems(config.ortbDemand, "endpoint");
-    var endpoints = demand.map(function (item) { return item.endpoint; });
+    var endpoints = demand.slice();
     listFrom(config.ortbEndpoints).forEach(function (endpoint) { endpoints.push(endpoint); });
     if (config.ortbEndpoint) endpoints.push(config.ortbEndpoint);
     if (config.auctionEndpoint) endpoints.push(config.auctionEndpoint);
-    endpoints = uniqueList(endpoints);
+    endpoints = uniqueDemand(endpoints.map(function (item) {
+      return typeof item === "string" ? { endpoint: item, timeoutMs: config.timeoutMs } : item;
+    }), "endpoint");
     if (endpoints.length) {
-      return auctionJsonDemand(endpoints.map(function (endpoint) {
-        return { endpoint: endpoint, params: "" };
+      return auctionJsonDemand(endpoints.map(function (item) {
+        return { endpoint: item.endpoint, params: "", timeoutMs: item.timeoutMs, floorCpm: item.floorCpm };
       }), config, "remnant-ortb").catch(function (error) {
         if (!config.remnantImageUrl) throw error;
         track(config, "remnant_auction_no_fill", { layer: "remnant-ortb", reason: error.message });
@@ -405,7 +456,7 @@
 
   function auctionJsonDemand(demand, config, layer) {
     var bids = demand.map(function (item) {
-      return jsonEndpoint(item.endpoint, config, layer, item.params)
+      return jsonEndpoint(item.endpoint, config, layer, item.params, item.timeoutMs)
         .then(function (ad) {
           ad.nbxEndpoint = item.endpoint;
           ad.nbxRankCpm = numberValue(ad.cpm, item.floorCpm);
@@ -426,21 +477,23 @@
     });
   }
 
-  function jsonEndpoint(endpoint, config, layer, prebidParams) {
-    var url = new URL(endpoint, window.location.href);
+  function jsonEndpoint(endpoint, config, layer, prebidParams, timeoutMs) {
+    var tmax = numberValue(timeoutMs, config.timeoutMs || 1800);
+    var url = new URL(expandMacros(endpoint, config, tmax), window.location.href);
     url.searchParams.set("publisher_id", config.publisherId);
     url.searchParams.set("publisher_domain", config.publisherDomain || domainFromPage());
     url.searchParams.set("placement_id", config.placementId);
     url.searchParams.set("w", config.width);
     url.searchParams.set("h", config.height);
     url.searchParams.set("cb", config.cachebuster);
+    url.searchParams.set("tmax", tmax);
     url.searchParams.set("layer", layer);
     url.searchParams.set("page", safePageUrl());
     if (layer === "prebid" && (prebidParams || config.prebidParams)) {
       url.searchParams.set("prebid_params", prebidParams || config.prebidParams);
     }
 
-    return withTimeout(fetch(url.toString(), { credentials: "omit" }), config.timeoutMs)
+    return withTimeout(fetch(url.toString(), { credentials: "omit" }), tmax)
       .then(function (response) {
         if (!response.ok) throw new Error(layer + "-http-" + response.status);
         return response.json();
@@ -454,6 +507,7 @@
 
   function renderVideo(root, config, vast, onDone) {
     clear(root);
+    markRenderStart(root);
     track(config, "impression", { layer: vast.layer });
     pixel(vast.impressionUrl);
 
@@ -511,6 +565,7 @@
 
   function renderDisplay(root, config, ad) {
     clear(root);
+    markRenderStart(root);
     track(config, "impression", { layer: ad.layer || "display" });
     pixel(ad.impressionUrl);
 
@@ -567,7 +622,7 @@
     frame.className = "nbx-frame";
     root.appendChild(frame);
 
-    var safeScriptUrl = escapeAttribute(ad.scriptUrl);
+    var safeScriptUrl = escapeAttribute(expandMacros(ad.scriptUrl, config, ad.timeoutMs || config.timeoutMs));
     var html = [
       "<!doctype html>",
       "<html><head><meta charset=\"utf-8\">",
@@ -637,7 +692,8 @@
     return badge;
   }
 
-  function setStatus(root, message) {
+  function setStatus(root, message, preserveRenderedAd) {
+    if (preserveRenderedAd && root.__nbxRotation && root.__nbxRotation.hasRenderedAd) return;
     clear(root);
     var status = document.createElement("div");
     status.className = "nbx-status";
@@ -705,7 +761,7 @@
   function pixel(url) {
     if (!url) return;
     var image = new Image();
-    image.src = url;
+    image.src = expandMacros(url, {});
   }
 
   function resolveUrl(value, base) {
@@ -729,6 +785,16 @@
     return listFrom(value).filter(function (item) {
       if (seen[item]) return false;
       seen[item] = true;
+      return true;
+    });
+  }
+
+  function uniqueDemand(items, endpointKey) {
+    var seen = {};
+    return arrayFrom(items).filter(function (item) {
+      var key = item && (item[endpointKey] || item);
+      if (!key || seen[key]) return false;
+      seen[key] = true;
       return true;
     });
   }
@@ -768,6 +834,38 @@
     }
   }
 
+  function expandMacros(value, config, tmax) {
+    var output = String(value || "");
+    if (!output) return output;
+
+    var pageUrl = safePageUrl();
+    var cachebuster = String(Date.now()) + Math.floor(Math.random() * 1000000);
+    var width = config && config.width ? config.width : 300;
+    var height = config && config.height ? config.height : 250;
+    var domain = config && config.publisherDomain ? config.publisherDomain : domainFromPage();
+    var timeout = numberValue(tmax, config && config.timeoutMs ? config.timeoutMs : 1800);
+    var replacements = {
+      "%%CACHEBUSTER%%": cachebuster,
+      "%%CACHE_BUSTER%%": cachebuster,
+      "%%RANDOM%%": cachebuster,
+      "%%TIMESTAMP%%": cachebuster,
+      "%%WIDTH%%": width,
+      "%%HEIGHT%%": height,
+      "%%TMAX%%": timeout,
+      "%%TIMEOUT%%": timeout,
+      "%%DOMAIN%%": domain,
+      "%%PAGE_URL%%": pageUrl,
+      "%%REFERRER_URL%%": pageUrl,
+      "%%REFERRER_URL_ESC%%": encodeURIComponent(pageUrl),
+      "%%REFERRER_URL_ESC_ESC%%": encodeURIComponent(encodeURIComponent(pageUrl))
+    };
+
+    Object.keys(replacements).forEach(function (macro) {
+      output = output.split(macro).join(replacements[macro]);
+    });
+    return output;
+  }
+
   function safePageUrl() {
     try { return window.top.location.href; } catch (_) { return document.referrer || window.location.href; }
   }
@@ -780,3 +878,4 @@
     return String(value || "").replace(/\/+$/, "");
   }
 })();
+
