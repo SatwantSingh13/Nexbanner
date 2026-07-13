@@ -150,7 +150,7 @@ function endpointOf(item) {
 function shortTag(configId, config) {
   const cdnScript = config.productVersion === "Version 2 Testing"
     ? "https://nexbid.uk/nexbanner/version-2-testing/src/nexbanner-gam.js"
-    : "https://nexbid.uk/nexbanner/final/src/nexbanner-gam.js";
+    : "https://nexbid.uk/nbx/v1.js?v=20260713-4";
   return [
     `<script src="${cdnScript}"`,
     `  data-config-id="${configId}"`,
