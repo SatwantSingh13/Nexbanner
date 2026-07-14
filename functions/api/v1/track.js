@@ -14,20 +14,27 @@ export async function onRequestGet(context) {
     publisherDomain: url.searchParams.get("publisher_domain") || "",
     placementId: url.searchParams.get("placement_id") || "",
     layer: url.searchParams.get("layer") || "",
+    requestId: url.searchParams.get("request_id") || "",
+    partnerName: url.searchParams.get("partner_name") || "",
     cpm: url.searchParams.get("cpm") || "",
     reason: url.searchParams.get("reason") || "",
   };
 
-  if (context.env.NEXBANNER_EVENTS && context.env.NEXBANNER_EVENTS.put) {
+  const store = eventStore(context.env);
+  if (store && store.put) {
     const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    await context.env.NEXBANNER_EVENTS.put(key, JSON.stringify(event), { expirationTtl: 60 * 60 * 24 * 30 });
-    await updateCounters(context.env.NEXBANNER_EVENTS, event);
+    await store.put(key, JSON.stringify(event), { expirationTtl: 60 * 60 * 24 * 30 });
+    await updateCounters(store, event);
   }
 
   const pixel = Uint8Array.from([71,73,70,56,57,97,1,0,1,0,128,0,0,255,255,255,0,0,0,33,249,4,1,0,0,0,0,44,0,0,0,0,1,0,1,0,0,2,2,68,1,0,59]);
   return new Response(pixel, {
     headers: { "content-type": "image/gif", "cache-control": "no-store", ...corsHeaders() },
   });
+}
+
+function eventStore(env) {
+  return env.NEXBANNER_EVENTS || env.NEXBANNER_CONFIGS || null;
 }
 
 async function updateCounters(store, event) {
@@ -48,6 +55,8 @@ async function incrementSummary(store, key, event) {
   const current = await store.get(key, "json");
   const summary = current || {
     key,
+    adRequests: 0,
+    filledRequests: 0,
     viewableRequests: 0,
     deliveredAds: 0,
     impressions: 0,
@@ -57,23 +66,42 @@ async function incrementSummary(store, key, event) {
     cycles: 0,
     cpmTotal: 0,
     revenueEstimate: 0,
+    impressionRevenue: 0,
     layers: {},
+    partners: {},
     versions: {},
     updatedAt: "",
   };
 
   const layer = event.layer || "unknown";
+  const partnerName = event.partnerName || "";
   summary.layers[layer] = summary.layers[layer] || { requests: 0, fills: 0, impressions: 0, noFill: 0, errors: 0, cpmTotal: 0 };
+  summary.partners = summary.partners || {};
+  if (partnerName) {
+    summary.partners[partnerName] = summary.partners[partnerName] || {
+      requests: 0,
+      impressions: 0,
+      cpmTotal: 0,
+      revenueEstimate: 0,
+    };
+  }
   if (event.productVersion) summary.versions[event.productVersion] = (summary.versions[event.productVersion] || 0) + 1;
 
+  if (summary.adRequests === undefined) summary.adRequests = 0;
+  if (summary.filledRequests === undefined) summary.filledRequests = 0;
+  if (summary.impressionRevenue === undefined) summary.impressionRevenue = 0;
+  if (event.event === "ad_request") summary.adRequests += 1;
+  if (event.event === "request_filled") summary.filledRequests += 1;
+  if (event.event === "partner_request" && partnerName) summary.partners[partnerName].requests += 1;
   if (event.event === "viewable_start") summary.viewableRequests += 1;
-  if (event.event === "rotation_layer_filled") {
+  if (event.event === "rotation_layer_filled" || event.event === "realtime_winner") {
     summary.deliveredAds += 1;
     summary.layers[layer].fills += 1;
   }
   if (event.event === "impression") {
     summary.impressions += 1;
     summary.layers[layer].impressions += 1;
+    if (partnerName) summary.partners[partnerName].impressions += 1;
   }
   if (event.event === "click") summary.clicks += 1;
   if (event.event.indexOf("no_fill") >= 0 || event.event === "no_ad") {
@@ -93,6 +121,11 @@ async function incrementSummary(store, key, event) {
     summary.layers[layer].cpmTotal += cpm;
     if (event.event === "impression" || event.event === "rotation_layer_filled") {
       summary.revenueEstimate += cpm / 1000;
+    }
+    if (event.event === "impression") summary.impressionRevenue += cpm / 1000;
+    if (event.event === "impression" && partnerName) {
+      summary.partners[partnerName].cpmTotal += cpm;
+      summary.partners[partnerName].revenueEstimate += cpm / 1000;
     }
   }
 
