@@ -45,11 +45,13 @@ function cacheConfig(context, configId, config) {
 function normalizeConfig(configId, body) {
   const setup = body.setup || {};
   const productVersion = body.productVersion || "Version 1";
+  const isVersion2 = productVersion === "Version 2 Testing";
+  const isNexSticky = productVersion === "NexSticky";
   const fallbackImageUrl = body.remnantImageUrl
     || body.displayImageUrl
     || setup.remnantImageUrl
     || setup.displayImageUrl
-    || "https://nexbid.b-cdn.net/assets/nexbid-test-display-300x250.png";
+    || (isVersion2 ? "https://nexbid.b-cdn.net/assets/nexbid-test-display-300x250.png" : "");
   const demand = Array.isArray(body.demand) ? body.demand : [];
   const vast = Array.isArray(body.vast) ? body.vast : [];
   const displayTags = Array.isArray(body.displayTags) ? body.displayTags : [];
@@ -69,6 +71,7 @@ function normalizeConfig(configId, body) {
     endpoint: endpointOf(item),
     floorCpm: item.floorCpm || "",
     timeoutMs: item.timeoutMs || "",
+    allowVpaid: item.allowVpaid !== false,
   })).filter((item) => item.endpoint);
   const displayScriptDemand = displayTags.map((item) => ({
     name: item.name || "",
@@ -114,14 +117,14 @@ function normalizeConfig(configId, body) {
     rotationMode: body.rotationMode || "version-1-viewable-rotation",
     publisherId: setup.publisherId || "",
     publisherDomain: setup.publisherDomain || "",
-    placementId: setup.placementId || "",
-    width: Number(setup.width || 300),
-    height: Number(setup.height || 250),
+    placementId: setup.placementId || (isNexSticky ? "bottom-sticky" : ""),
+    width: Number(setup.width || (isNexSticky ? 320 : 300)),
+    height: Number(setup.height || (isNexSticky ? 50 : 250)),
     mode: "video-first",
     vastDemand: vastDemandItems,
     vastTags: vastDemandItems.map((item) => item.endpoint),
     prebidDemand,
-    prebidEndpoint: (prebidDemand[0] || {}).endpoint || `${apiBase}/api/v1/auction`,
+    prebidEndpoint: (prebidDemand[0] || {}).endpoint || (isVersion2 ? `${apiBase}/api/v1/auction` : ""),
     prebidParams: (prebidDemand[0] || {}).params || "",
     displayScriptDemand,
     displayScriptUrls: displayScriptDemand.map((item) => item.endpoint),
@@ -132,8 +135,8 @@ function normalizeConfig(configId, body) {
     displayEndpoint: endpointOf(demand.find((item) => item.type === "display") || {}) || "",
     ortbDemand,
     ortbEndpoints,
-    ortbEndpoint: ortbEndpoints[0] || `${apiBase}/api/v1/auction`,
-    auctionEndpoint: `${apiBase}/api/v1/auction`,
+    ortbEndpoint: ortbEndpoints[0] || (isVersion2 ? `${apiBase}/api/v1/auction` : ""),
+    auctionEndpoint: isVersion2 ? `${apiBase}/api/v1/auction` : "",
     trackUrl: `${apiBase}/api/v1/track`,
     rotationMs: Number(body.rotationMs || setup.rotationMs || 10000),
     displayImageUrl: body.displayImageUrl || setup.displayImageUrl || "",
@@ -148,9 +151,7 @@ function endpointOf(item) {
 }
 
 function shortTag(configId, config) {
-  const cdnScript = config.productVersion === "Version 2 Testing"
-    ? "https://nexbid.uk/nexbanner/version-2-testing/src/nexbanner-gam.js"
-    : "https://nexbid.uk/nbx/v1.js?v=20260713-5";
+  const cdnScript = scriptForProduct(config.productVersion);
   return [
     `<script src="${cdnScript}"`,
     `  data-config-id="${configId}"`,
@@ -159,6 +160,12 @@ function shortTag(configId, config) {
     `  data-placement-id="${escapeAttr(config.placementId || "")}"`,
     `  data-api-base="https://nexbid.uk"></script>`,
   ].join("\n");
+}
+
+function scriptForProduct(productVersion) {
+  if (productVersion === "Version 2 Testing") return "https://nexbid.uk/nexbanner/version-2-testing/src/nexbanner-gam.js";
+  if (productVersion === "NexSticky") return "https://nexbid.uk/nexsticky/final/src/nexsticky-gam.js";
+  return "https://nexbid.uk/nbx/v1.js?v=20260713-5";
 }
 
 function escapeAttr(value) {
@@ -183,6 +190,7 @@ function domainConfigId(body) {
 
   if (!domain) return "";
   if (body.productVersion === "Version 2 Testing") return `${domain}-version-2-testing`;
+  if (body.productVersion === "NexSticky") return `${domain}-nexsticky`;
   return domain;
 }
 
