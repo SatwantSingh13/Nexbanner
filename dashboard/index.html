@@ -298,12 +298,30 @@
         </div>
 
         <div class="report-grid">
-          <div><strong id="metricViewable">0</strong><span>Viewable Requests</span></div>
-          <div><strong id="metricDelivered">0</strong><span>Delivered Ads</span></div>
+          <div><strong id="metricAdRequests">0</strong><span>Moneycontrol Ad Requests</span></div>
+          <div><strong id="metricFilledRequests">0</strong><span>Requests With Ad Delivered</span></div>
           <div><strong id="metricFillRate">0%</strong><span>Fill Rate</span></div>
-          <div><strong id="metricNoFill">0</strong><span>No Fill</span></div>
-          <div><strong id="metricImpressions">0</strong><span>Impressions</span></div>
-          <div><strong id="metricRevenue">$0.0000</strong><span>Est. Revenue</span></div>
+          <div><strong id="metricEcpm">N/A</strong><span>eCPM</span></div>
+        </div>
+
+        <div class="partner-report">
+          <h3>Partner Delivery</h3>
+          <div class="partner-table-wrap">
+            <table class="partner-table">
+              <thead>
+                <tr>
+                  <th>Partner</th>
+                  <th>Requests</th>
+                  <th>Ads Delivered</th>
+                  <th>Fill Rate</th>
+                  <th>eCPM</th>
+                </tr>
+              </thead>
+              <tbody id="partnerReportBody">
+                <tr><td colspan="5">Partner data will appear after the next live request.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <textarea id="reportOutput" spellcheck="false" readonly></textarea>
@@ -325,7 +343,7 @@
     </main>
 
     <script src="./dashboard-auth.js?v=login-1"></script>
-    <script src="./app.js?v=domain-id-1"></script>
+    <script src="./app.js?v=partner-report-1"></script>
   </body>
 </html>
 
