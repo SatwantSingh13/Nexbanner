@@ -70,12 +70,11 @@
     reportConfigId: document.getElementById("reportConfigId"),
     refreshReport: document.getElementById("refreshReport"),
     autoRefreshReport: document.getElementById("autoRefreshReport"),
-    metricViewable: document.getElementById("metricViewable"),
-    metricDelivered: document.getElementById("metricDelivered"),
+    metricAdRequests: document.getElementById("metricAdRequests"),
+    metricFilledRequests: document.getElementById("metricFilledRequests"),
     metricFillRate: document.getElementById("metricFillRate"),
-    metricNoFill: document.getElementById("metricNoFill"),
-    metricImpressions: document.getElementById("metricImpressions"),
-    metricRevenue: document.getElementById("metricRevenue"),
+    metricEcpm: document.getElementById("metricEcpm"),
+    partnerReportBody: document.getElementById("partnerReportBody"),
     reportOutput: document.getElementById("reportOutput"),
     exportConfig: document.getElementById("exportConfig")
   };
@@ -586,16 +585,51 @@
   }
 
   function renderReport(summary) {
-    var viewable = numberOr(summary.viewableRequests, 0);
-    var delivered = numberOr(summary.deliveredAds, 0);
-    var fillRate = viewable ? Math.round((delivered / viewable) * 1000) / 10 : 0;
+    var adRequests = numberOr(summary.adRequests, 0);
+    var filledRequests = numberOr(summary.filledRequests, 0);
+    var impressions = numberOr(summary.impressions, 0);
+    var impressionRevenue = numberOr(summary.impressionRevenue, 0);
+    var fillRate = adRequests ? Math.round((filledRequests / adRequests) * 1000) / 10 : 0;
+    var ecpm = impressions && impressionRevenue > 0 ? (impressionRevenue / impressions) * 1000 : null;
 
-    els.metricViewable.textContent = formatNumber(viewable);
-    els.metricDelivered.textContent = formatNumber(delivered);
+    els.metricAdRequests.textContent = formatNumber(adRequests);
+    els.metricFilledRequests.textContent = formatNumber(filledRequests);
     els.metricFillRate.textContent = fillRate + "%";
-    els.metricNoFill.textContent = formatNumber(numberOr(summary.noFill, 0));
-    els.metricImpressions.textContent = formatNumber(numberOr(summary.impressions, 0));
-    els.metricRevenue.textContent = "$" + numberOr(summary.revenueEstimate, 0).toFixed(4);
+    els.metricEcpm.textContent = ecpm === null ? "N/A" : "$" + ecpm.toFixed(2);
+    renderPartnerReport(summary.partners || {});
+  }
+
+  function renderPartnerReport(partners) {
+    var rows = Object.keys(partners).map(function (name) {
+      var partner = partners[name] || {};
+      var requests = numberOr(partner.requests, 0);
+      var impressions = numberOr(partner.impressions, 0);
+      var revenue = numberOr(partner.revenueEstimate, 0);
+      return {
+        name: name,
+        requests: requests,
+        impressions: impressions,
+        fillRate: requests ? (impressions / requests) * 100 : 0,
+        ecpm: impressions && revenue > 0 ? (revenue / impressions) * 1000 : null
+      };
+    }).sort(function (a, b) {
+      return b.impressions - a.impressions || b.requests - a.requests;
+    });
+
+    if (!rows.length) {
+      els.partnerReportBody.innerHTML = '<tr><td colspan="5">Partner data will appear after the next live request.</td></tr>';
+      return;
+    }
+
+    els.partnerReportBody.innerHTML = rows.map(function (row) {
+      return "<tr>" +
+        "<td>" + escapeHtml(row.name) + "</td>" +
+        "<td>" + formatNumber(row.requests) + "</td>" +
+        "<td>" + formatNumber(row.impressions) + "</td>" +
+        "<td>" + row.fillRate.toFixed(1) + "%</td>" +
+        "<td>" + (row.ecpm === null ? "N/A" : "$" + row.ecpm.toFixed(2)) + "</td>" +
+        "</tr>";
+    }).join("");
   }
 
   function toggleAutoRefreshReport() {
