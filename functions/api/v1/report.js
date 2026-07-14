@@ -3,9 +3,9 @@ export async function onRequestOptions() {
 }
 
 export async function onRequestGet(context) {
-  const store = context.env.NEXBANNER_EVENTS;
+  const store = context.env.NEXBANNER_EVENTS || context.env.NEXBANNER_CONFIGS;
   if (!store || !store.get) {
-    return json({ ok: false, error: "missing_NEXBANNER_EVENTS_binding" }, 500);
+    return json({ ok: false, error: "missing_NEXBANNER_EVENTS_or_NEXBANNER_CONFIGS_binding" }, 500);
   }
 
   const url = new URL(context.request.url);
@@ -33,6 +33,8 @@ export async function onRequestGet(context) {
 function emptySummary(key) {
   return {
     key,
+    adRequests: 0,
+    filledRequests: 0,
     viewableRequests: 0,
     deliveredAds: 0,
     impressions: 0,
@@ -42,7 +44,9 @@ function emptySummary(key) {
     cycles: 0,
     cpmTotal: 0,
     revenueEstimate: 0,
+    impressionRevenue: 0,
     layers: {},
+    partners: {},
     versions: {},
     updatedAt: "",
   };
