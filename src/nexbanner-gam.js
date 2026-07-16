@@ -69,7 +69,8 @@
 
     var endpoint = config.configEndpoint ||
       trimSlash(config.apiBase) + "/api/v1/config/" + encodeURIComponent(config.configId);
-    var pending = fetch(endpoint, { credentials: "omit" }).then(function (response) {
+    endpoint = withCachebuster(endpoint, config.cachebuster);
+    var pending = fetch(endpoint, { credentials: "omit", cache: "no-store" }).then(function (response) {
       if (!response.ok) throw new Error("config-http-" + response.status);
       return response.json();
     });
@@ -148,5 +149,13 @@
   function trimSlash(value) {
     return String(value || "").replace(/\/+$/, "");
   }
+  function withCachebuster(url, cachebuster) {
+    try {
+      var parsed = new URL(url, window.location.href);
+      parsed.searchParams.set("nbx_cb", cachebuster || String(Date.now()));
+      return parsed.toString();
+    } catch (_) {
+      return url + (url.indexOf("?") >= 0 ? "&" : "?") + "nbx_cb=" + encodeURIComponent(cachebuster || String(Date.now()));
+    }
+  }
 })();
-
