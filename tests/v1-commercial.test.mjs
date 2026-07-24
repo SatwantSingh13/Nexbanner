@@ -488,6 +488,7 @@ test("17. Current configuration shape remains readable", async () => {
         configId: "compat-test",
         setup: { publisherDomain: "moneycontrol.com" },
         vast: [{ name: "VAST", endpoint: "https://vast.example/tag", floorCpm: "0.15" }],
+        displayDemand: [{ name: "Direct", endpoint: "https://display.example/bid" }],
         displayTags: [{ name: "JS", endpoint: "https://display.example/tag.js", floorCpm: "0.15" }],
         adserverTags: [{ name: "GAM", tagType: "html", html: "<div>ad</div>", floorCpm: "0.15" }]
       })
@@ -501,6 +502,7 @@ test("17. Current configuration shape remains readable", async () => {
   assert.doesNotMatch(result.tag, /prebid|ortb|vast-tag|display-endpoint/i);
   const saved = JSON.parse(writes.get("compat-test"));
   assert.equal(saved.vastDemand[0].floorCpm, "0.15");
+  assert.equal(saved.displayDemand[0].endpoint, "https://display.example/bid");
   assert.equal(saved.prebidDemand.length, 0);
   assert.equal(saved.ortbDemand.length, 0);
 });
