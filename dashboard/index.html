@@ -52,13 +52,14 @@
           </label>
           <label>
             CDN Script URL
-            <input id="cdnScript" value="https://nexbid.uk/nbx/v1.js?v=20260713-5">
+            <input id="cdnScript" value="https://nexbid.uk/nbx/v1.js?v=20260724-6">
           </label>
           <label>
             API Base URL
             <input id="apiBase" value="https://nexbid.uk">
           </label>
         </div>
+        <p class="notice show">Version 1 starts one auction only after the slot remains at least 30% visible for 200 ms.</p>
       </section>
 
       <section class="panel">
@@ -77,7 +78,6 @@
             <select id="demandType">
               <option value="vast">VAST Video</option>
               <option value="display">Display JSON</option>
-              <option value="ortb">ORTB Fallback</option>
             </select>
           </label>
           <label>
@@ -85,7 +85,7 @@
             <input id="demandEndpoint" placeholder="https://partner.com/vast?pub=123" required>
           </label>
           <label>
-            Floor CPM
+            Configured fixed CPM (USD; VAST only)
             <input id="floorCpm" value="0.10" inputmode="decimal">
           </label>
           <label>
@@ -94,6 +94,7 @@
           </label>
           <button type="submit">Add Endpoint</button>
         </form>
+        <p class="notice show">For VAST, this is the configured auction CPM—not a real-time bid returned by the tag.</p>
         <div class="notice" id="demandNotice" aria-live="polite"></div>
 
         <div class="demand-list" id="demandList"></div>
@@ -115,7 +116,7 @@
             <input id="displayTagUrl" placeholder="https://partner.com/display-300x250.js" required>
           </label>
           <label>
-            Floor CPM
+            Configured fixed CPM (USD)
             <input id="displayTagFloor" value="0.10" inputmode="decimal">
           </label>
           <label>
@@ -124,12 +125,13 @@
           </label>
           <button type="submit">Add Display JS Tag</button>
         </form>
+        <p class="notice show">This value is the configured auction CPM, not a real-time bid returned by the tag.</p>
         <div class="notice" id="displayTagNotice" aria-live="polite"></div>
 
         <div class="demand-list" id="displayTagList"></div>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="prebidVersion1Panel" hidden>
         <div class="section-title">
           <p>Prebid</p>
           <h2>Add Prebid Parameters</h2>
@@ -149,7 +151,7 @@
             <textarea id="prebidParams" placeholder='{"bidder":"partner","params":{"placementId":"123"}}' spellcheck="false"></textarea>
           </label>
           <label>
-            Floor CPM
+            Configured fixed CPM (USD)
             <input id="prebidFloor" value="0.20" inputmode="decimal">
           </label>
           <label>
@@ -190,7 +192,7 @@
             <input id="adserverUrl" placeholder="https://adserver.com/tag.js">
           </label>
           <label>
-            Floor CPM
+            Configured fixed CPM (USD)
             <input id="adserverFloor" value="0.10" inputmode="decimal">
           </label>
           <label>
@@ -199,12 +201,13 @@
           </label>
           <button type="submit">Add Ad Server Tag</button>
         </form>
+        <p class="notice show">This value is the configured auction CPM, not a real-time bid returned by the tag.</p>
         <div class="notice" id="adserverNotice" aria-live="polite"></div>
 
         <div class="demand-list" id="adserverList"></div>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="ortbVersion1Panel" hidden>
         <div class="section-title">
           <p>Final Fallback</p>
           <h2>ORTB Ad Exchange Endpoints</h2>

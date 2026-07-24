@@ -21,6 +21,12 @@ export async function onRequestGet(context) {
     requestId: url.searchParams.get("request_id") || "",
     partnerName: url.searchParams.get("partner_name") || "",
     cpm: url.searchParams.get("cpm") || "",
+    auctionId: url.searchParams.get("auction_id") || "",
+    demandType: url.searchParams.get("demand_type") || "",
+    bidMode: url.searchParams.get("bid_mode") || "",
+    currency: url.searchParams.get("currency") || "",
+    responseTimeMs: url.searchParams.get("response_time_ms") || "",
+    intersectionRatio: url.searchParams.get("intersection_ratio") || "",
     reason: url.searchParams.get("reason") || "",
   };
 

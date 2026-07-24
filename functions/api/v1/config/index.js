@@ -59,7 +59,7 @@ function normalizeConfig(configId, body) {
   const adserverTags = Array.isArray(body.adserverTags) ? body.adserverTags : [];
   const apiBase = trimSlash(setup.apiBase || "https://nexbid.uk");
   const vastDemand = demand.filter((item) => item.type === "vast").concat(vast);
-  const prebidDemand = prebid.map((item) => ({
+  const prebidDemand = (isVersion2 ? prebid : []).map((item) => ({
     name: item.name || "",
     endpoint: endpointOf(item) || `${apiBase}/api/v1/auction`,
     params: item.params || "",
@@ -69,14 +69,18 @@ function normalizeConfig(configId, body) {
   const vastDemandItems = vastDemand.map((item) => ({
     name: item.name || "",
     endpoint: endpointOf(item),
+    configuredBidCpm: item.configuredBidCpm || "",
     floorCpm: item.floorCpm || "",
+    currency: item.currency || "USD",
     timeoutMs: item.timeoutMs || "",
     allowVpaid: item.allowVpaid !== false,
   })).filter((item) => item.endpoint);
   const displayScriptDemand = displayTags.map((item) => ({
     name: item.name || "",
     endpoint: endpointOf(item),
+    configuredBidCpm: item.configuredBidCpm || "",
     floorCpm: item.floorCpm || "",
+    currency: item.currency || "USD",
     timeoutMs: item.timeoutMs || "",
   })).filter((item) => item.endpoint);
   const adserverScriptDemand = adserverTags
@@ -84,7 +88,9 @@ function normalizeConfig(configId, body) {
     .map((item) => ({
       name: item.name || "",
       endpoint: endpointOf(item),
+      configuredBidCpm: item.configuredBidCpm || "",
       floorCpm: item.floorCpm || "",
+      currency: item.currency || "USD",
       timeoutMs: item.timeoutMs || "",
     }))
     .filter((item) => item.endpoint);
@@ -93,16 +99,18 @@ function normalizeConfig(configId, body) {
     .map((item) => ({
       name: item.name || "",
       html: encodeURIComponent(item.html || ""),
+      configuredBidCpm: item.configuredBidCpm || "",
       floorCpm: item.floorCpm || "",
+      currency: item.currency || "USD",
       timeoutMs: item.timeoutMs || "",
     }))
     .filter((item) => item.html);
   const ortbEndpoints = demand
-    .filter((item) => item.type === "ortb")
+    .filter((item) => isVersion2 && item.type === "ortb")
     .map(endpointOf)
     .filter(Boolean);
   const ortbDemand = demand
-    .filter((item) => item.type === "ortb")
+    .filter((item) => isVersion2 && item.type === "ortb")
     .map((item) => ({
       name: item.name || "",
       endpoint: endpointOf(item),
@@ -110,11 +118,19 @@ function normalizeConfig(configId, body) {
       timeoutMs: item.timeoutMs || "",
     }))
     .filter((item) => item.endpoint);
+  const displayDemand = demand
+    .filter((item) => item.type === "display")
+    .map((item) => ({
+      name: item.name || "",
+      endpoint: endpointOf(item),
+      timeoutMs: item.timeoutMs || "",
+    }))
+    .filter((item) => item.endpoint);
 
   return {
     configId,
     productVersion,
-    rotationMode: body.rotationMode || "version-1-viewable-rotation",
+    rotationMode: isVersion2 ? (body.rotationMode || "realtime-viewable-bidding") : "version-1-commercial-unified-auction",
     publisherId: setup.publisherId || "",
     publisherDomain: setup.publisherDomain || "",
     placementId: setup.placementId || (isNexSticky ? "bottom-sticky" : ""),
@@ -132,13 +148,19 @@ function normalizeConfig(configId, body) {
     adserverScriptUrls: adserverScriptDemand.map((item) => item.endpoint),
     adserverHtmlDemand,
     adserverHtmlTags: adserverHtmlDemand.map((item) => item.html),
-    displayEndpoint: endpointOf(demand.find((item) => item.type === "display") || {}) || "",
+    displayDemand,
+    displayEndpoint: (displayDemand[0] || {}).endpoint || "",
     ortbDemand,
     ortbEndpoints,
     ortbEndpoint: ortbEndpoints[0] || (isVersion2 ? `${apiBase}/api/v1/auction` : ""),
     auctionEndpoint: isVersion2 ? `${apiBase}/api/v1/auction` : "",
     trackUrl: `${apiBase}/api/v1/track`,
-    rotationMs: Number(body.rotationMs || setup.rotationMs || 10000),
+    auctionTimeoutMs: Number(body.auctionTimeoutMs || setup.auctionTimeoutMs || 900),
+    partnerTimeoutMs: Number(body.partnerTimeoutMs || setup.partnerTimeoutMs || 750),
+    bidTtlMs: Number(body.bidTtlMs || setup.bidTtlMs || 5000),
+    currency: "USD",
+    configVersion: body.configVersion || "",
+    rotationMs: isVersion2 ? Number(body.rotationMs || setup.rotationMs || 10000) : 0,
     displayImageUrl: body.displayImageUrl || setup.displayImageUrl || "",
     remnantImageUrl: fallbackImageUrl,
     logoText: "N",
@@ -153,19 +175,17 @@ function endpointOf(item) {
 function shortTag(configId, config) {
   const cdnScript = scriptForProduct(config.productVersion);
   return [
-    `<script src="${cdnScript}"`,
-    `  data-config-id="${configId}"`,
-    `  data-publisher-id="${escapeAttr(config.publisherId || "")}"`,
-    `  data-publisher-domain="${escapeAttr(config.publisherDomain || "")}"`,
-    `  data-placement-id="${escapeAttr(config.placementId || "")}"`,
-    `  data-api-base="https://nexbid.uk"></script>`,
+    `<script`,
+    `  src="${cdnScript}"`,
+    `  data-config-id="${escapeAttr(configId)}">`,
+    `</script>`,
   ].join("\n");
 }
 
 function scriptForProduct(productVersion) {
   if (productVersion === "Version 2 Testing") return "https://nexbid.uk/nexbanner/version-2-testing/src/nexbanner-gam.js";
   if (productVersion === "NexSticky") return "https://nexbid.uk/nexsticky/final/src/nexsticky-gam.js";
-  return "https://nexbid.uk/nbx/v1.js?v=20260713-5";
+  return "https://nexbid.uk/nbx/v1.js?v=20260724-6";
 }
 
 function escapeAttr(value) {
