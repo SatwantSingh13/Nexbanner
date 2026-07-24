@@ -1,3 +1,4 @@
+/*! NexBanner Version 3 — commercial unified-auction player, release tag v=20260724-6. */
 (function () {
   "use strict";
 
