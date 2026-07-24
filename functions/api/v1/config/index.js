@@ -120,6 +120,7 @@ function normalizeConfig(configId, body) {
     .filter((item) => item.endpoint);
   const displayDemand = demand
     .filter((item) => item.type === "display")
+    .concat(Array.isArray(body.displayDemand) ? body.displayDemand : [])
     .map((item) => ({
       name: item.name || "",
       endpoint: endpointOf(item),
