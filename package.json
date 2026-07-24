@@ -1,5 +1,6 @@
 {
   "name": "nexbanner-v1-commercial",
+  "description": "NexBanner Version 3 commercial unified-auction player",
   "private": true,
   "type": "module",
   "scripts": {
