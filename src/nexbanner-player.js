@@ -6,19 +6,18 @@
   function mount(target, config) {
     config.requestId = config.requestId || makeRequestId();
     config.__requestFilledTracked = false;
+    config.__impressionTracked = false;
     loadConfig(config)
       .then(function (resolvedConfig) {
         track(resolvedConfig, "ad_request", { layer: "gam-entry" });
-        preconnectDemand(resolvedConfig);
         var root = buildShell(target, resolvedConfig);
-        startViewableRotation(root, resolvedConfig);
+        startCommercialAuction(root, resolvedConfig);
       })
       .catch(function () {
         track(config, "ad_request", { layer: "gam-entry" });
-        preconnectDemand(config);
         var root = buildShell(target, config);
         track(config, "config_error", { layer: "config" });
-        startViewableRotation(root, config);
+        startCommercialAuction(root, config);
       });
   }
 
@@ -27,7 +26,10 @@
 
     var endpoint = config.configEndpoint ||
       trimSlash(config.apiBase || "https://nexbid.uk") + "/api/v1/config/" + encodeURIComponent(config.configId);
-    var remoteConfig = config.__configPromise || fetch(endpoint, { credentials: "omit" })
+    if (config.configVersion) {
+      endpoint += (endpoint.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(config.configVersion);
+    }
+    var remoteConfig = config.__configPromise || fetch(endpoint, { credentials: "omit", cache: "default" })
       .then(function (response) {
         if (!response.ok) throw new Error("config-http-" + response.status);
         return response.json();
@@ -47,6 +49,7 @@
     });
     merged.vastTags = listFrom(merged.vastTags);
     merged.vastDemand = arrayFrom(merged.vastDemand);
+    merged.displayDemand = arrayFrom(merged.displayDemand);
     merged.displayScriptUrls = listFrom(merged.displayScriptUrls);
     merged.displayScriptDemand = arrayFrom(merged.displayScriptDemand);
     merged.adserverScriptUrls = listFrom(merged.adserverScriptUrls);
@@ -57,6 +60,544 @@
     merged.ortbDemand = arrayFrom(merged.ortbDemand);
     merged.ortbEndpoints = listFrom(merged.ortbEndpoints);
     return merged;
+  }
+
+  function startCommercialAuction(root, config) {
+    var state = {
+      destroyed: false,
+      eligible: false,
+      intersectionRatio: 0,
+      auctionStarted: false,
+      auctionRunning: false,
+      auctionCompleted: false,
+      rendering: false,
+      filled: false,
+      impressionTracked: false,
+      bids: [],
+      observer: null,
+      debounceTimer: null,
+      expiryTimer: null,
+      abortControllers: [],
+      requestId: config.requestId,
+      auctionId: "",
+      eligibilityTracked: false
+    };
+    root.__nbxCommercialAuction = state;
+    config.rotationMode = "version-1-commercial-unified-auction";
+    config.auctionTimeoutMs = numberValue(config.auctionTimeoutMs, 900);
+    config.partnerTimeoutMs = numberValue(config.partnerTimeoutMs, 750);
+    config.bidTtlMs = numberValue(config.bidTtlMs, 5000);
+    config.currency = String(config.currency || "USD").toUpperCase();
+
+    function eligibleNow() {
+      return isAuctionEligible(state);
+    }
+
+    function clearDebounce() {
+      if (state.debounceTimer) window.clearTimeout(state.debounceTimer);
+      state.debounceTimer = null;
+    }
+
+    function scheduleEligibility() {
+      if (!eligibleNow() || state.filled || state.auctionCompleted || state.debounceTimer) return;
+      if (!state.eligibilityTracked) {
+        state.eligibilityTracked = true;
+        track(config, "eligibility_30_start", {
+          layer: "viewability",
+          intersectionRatio: state.intersectionRatio
+        });
+      }
+      state.debounceTimer = window.setTimeout(function () {
+        state.debounceTimer = null;
+        if (!eligibleNow() || state.filled || state.auctionCompleted) return;
+        state.eligible = true;
+        beginEligibleAuction(root, config, state);
+      }, 200);
+    }
+
+    function markIneligible() {
+      clearDebounce();
+      state.eligible = false;
+      if (state.eligibilityTracked) {
+        state.eligibilityTracked = false;
+        track(config, "eligibility_30_end", {
+          layer: "viewability",
+          intersectionRatio: state.intersectionRatio
+        });
+      }
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible" && state.intersectionRatio >= 0.3) {
+        scheduleEligibility();
+        if (state.bids.length && !state.rendering) renderRankedCandidates(root, config, state);
+      } else {
+        markIneligible();
+      }
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    state.removeVisibilityListener = function () {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+
+    if (!("IntersectionObserver" in window)) {
+      state.intersectionRatio = document.visibilityState === "visible" ? 1 : 0;
+      scheduleEligibility();
+      return;
+    }
+
+    state.observer = new IntersectionObserver(function (entries) {
+      var entry = entries[0];
+      state.intersectionRatio = entry && entry.isIntersecting ? numberValue(entry.intersectionRatio, 0) : 0;
+      if (state.intersectionRatio >= 0.3 && document.visibilityState === "visible") {
+        scheduleEligibility();
+        if (state.bids.length && !state.rendering) renderRankedCandidates(root, config, state);
+      } else {
+        markIneligible();
+      }
+    }, { threshold: [0, 0.3, 1] });
+    state.observer.observe(root);
+  }
+
+  function isAuctionEligible(state) {
+    return !state.destroyed &&
+      state.intersectionRatio >= 0.3 &&
+      document.visibilityState === "visible";
+  }
+
+  function beginEligibleAuction(root, config, state) {
+    if (!isAuctionEligible(state) || state.auctionRunning || state.rendering || state.filled || state.auctionCompleted) return;
+    if (state.bids.length) {
+      renderRankedCandidates(root, config, state);
+      return;
+    }
+
+    state.auctionStarted = true;
+    state.auctionRunning = true;
+    state.auctionId = makeRequestId();
+    preconnectDemand(config);
+    track(config, "auction_started", {
+      layer: "auction",
+      auctionId: state.auctionId,
+      intersectionRatio: state.intersectionRatio
+    });
+
+    runUnifiedAuction(config, state).then(function (bids) {
+      state.auctionRunning = false;
+      if (state.destroyed || state.filled) return;
+      state.bids = rankCandidates(bids).filter(function (candidate) {
+        return isValidCandidate(candidate);
+      });
+      if (!state.bids.length) {
+        state.auctionCompleted = true;
+        track(config, "auction_no_bid", {
+          layer: "auction",
+          auctionId: state.auctionId,
+          intersectionRatio: state.intersectionRatio
+        });
+        renderNoAd(root, config);
+        return;
+      }
+      if (isAuctionEligible(state)) {
+        renderRankedCandidates(root, config, state);
+      } else {
+        scheduleBidExpiry(root, config, state);
+      }
+    }).catch(function (error) {
+      state.auctionRunning = false;
+      state.auctionCompleted = true;
+      track(config, "auction_no_bid", {
+        layer: "auction",
+        auctionId: state.auctionId,
+        reason: error.message || "auction-error",
+        intersectionRatio: state.intersectionRatio
+      });
+      renderNoAd(root, config);
+    });
+  }
+
+  function runUnifiedAuction(config, state) {
+    var tasks = [];
+    var order = 0;
+    var expiresAt = Date.now() + numberValue(config.bidTtlMs, 5000);
+    var partnerTimeoutMs = numberValue(config.partnerTimeoutMs, 750);
+
+    var vastItems = arrayFrom(config.vastDemand).slice();
+    listFrom(config.vastTags).forEach(function (endpoint) {
+      vastItems.push({ endpoint: endpoint, timeoutMs: partnerTimeoutMs });
+    });
+    if (config.vastUrl) vastItems.push({ endpoint: config.vastUrl, timeoutMs: partnerTimeoutMs });
+    uniqueDemand(vastItems, "endpoint").forEach(function (item) {
+      var configOrder = order++;
+      tasks.push(collectVastCandidate(item, config, state, configOrder, expiresAt));
+    });
+
+    var displayItems = arrayFrom(config.displayDemand).slice();
+    if (config.displayEndpoint) displayItems.push({
+      name: config.displayPartnerName || "Direct Display",
+      endpoint: config.displayEndpoint,
+      timeoutMs: partnerTimeoutMs
+    });
+    uniqueDemand(displayItems, "endpoint").forEach(function (item) {
+      var configOrder = order++;
+      tasks.push(collectDisplayCandidate(item, config, state, configOrder, expiresAt));
+    });
+
+    if (config.displayImageUrl) {
+      tasks.push(Promise.resolve(normalizeCandidate({
+        partnerName: config.displayPartnerName || "Configured Display Image",
+        demandType: "display-image",
+        bidMode: "fixed",
+        cpm: numberValue(config.configuredBidCpm, numberValue(config.displayFloorCpm, 0)),
+        currency: config.currency || "USD",
+        responseTimeMs: 0,
+        configOrder: order++,
+        expiresAt: expiresAt,
+        creative: {
+          type: "image",
+          imageUrl: config.displayImageUrl,
+          clickUrl: config.clickUrl,
+          impressionUrl: config.impressionUrl
+        }
+      }, config, state)));
+    }
+
+    fixedScriptItems(config).forEach(function (item) {
+      tasks.push(Promise.resolve(fixedTagCandidate(item, "js-tag", "script", order++, expiresAt, config, state)));
+    });
+    fixedHtmlItems(config).forEach(function (item) {
+      tasks.push(Promise.resolve(fixedTagCandidate(item, "html-tag", "html", order++, expiresAt, config, state)));
+    });
+
+    return new Promise(function (resolve) {
+      var results = [];
+      var pending = tasks.length;
+      var finished = false;
+      var timer = window.setTimeout(function () {
+        state.abortControllers.forEach(function (controller) {
+          try { controller.abort(); } catch (_) {}
+        });
+        state.abortControllers = [];
+        finish();
+      }, numberValue(config.auctionTimeoutMs, 900));
+
+      function finish() {
+        if (finished) return;
+        finished = true;
+        window.clearTimeout(timer);
+        resolve(results);
+      }
+
+      if (!pending) {
+        finish();
+        return;
+      }
+
+      tasks.forEach(function (task) {
+        Promise.resolve(task).then(function (candidate) {
+          if (!finished && candidate) results.push(candidate);
+        }).catch(function () {}).finally(function () {
+          pending -= 1;
+          if (!pending) finish();
+        });
+      });
+    });
+  }
+
+  function collectVastCandidate(item, config, state, configOrder, expiresAt) {
+    var startedAt = Date.now();
+    var timeoutMs = Math.min(
+      numberValue(item.timeoutMs, config.partnerTimeoutMs),
+      numberValue(config.partnerTimeoutMs, 750)
+    );
+    var requestItem = {};
+    Object.keys(item || {}).forEach(function (key) { requestItem[key] = item[key]; });
+    requestItem.timeoutMs = timeoutMs;
+    requestItem.__commercialState = state;
+    return fetchVastTag(requestItem, config).then(function (vast) {
+      var cpm = numberValue(item.configuredBidCpm, numberValue(item.floorCpm, 0));
+      var candidate = normalizeCandidate({
+        partnerName: item.name || "VAST",
+        demandType: "vast",
+        bidMode: "fixed",
+        cpm: cpm,
+        currency: item.currency || config.currency || "USD",
+        responseTimeMs: Date.now() - startedAt,
+        configOrder: configOrder,
+        expiresAt: expiresAt,
+        timeoutMs: timeoutMs,
+        creative: {
+          type: vast.adType === "vpaid-js" ? "vpaid" : "video",
+          ad: vast
+        }
+      }, config, state);
+      trackCandidateResponse(config, state, candidate);
+      return candidate;
+    }).catch(function (error) {
+      track(config, "vast_tag_failed", {
+        layer: "vast",
+        partnerName: item.name || "VAST",
+        reason: error.message || "vast-no-bid",
+        auctionId: state.auctionId,
+        demandType: "vast",
+        bidMode: "fixed",
+        currency: String(item.currency || config.currency || "USD").toUpperCase(),
+        responseTimeMs: Date.now() - startedAt,
+        intersectionRatio: state.intersectionRatio
+      });
+      return null;
+    });
+  }
+
+  function collectDisplayCandidate(item, config, state, configOrder, expiresAt) {
+    var startedAt = Date.now();
+    var partnerName = item.name || "Direct Display";
+    var timeoutMs = Math.min(
+      numberValue(item.timeoutMs, config.partnerTimeoutMs),
+      numberValue(config.partnerTimeoutMs, 750)
+    );
+    track(config, "partner_request", {
+      layer: "display",
+      partnerName: partnerName,
+      auctionId: state.auctionId,
+      demandType: "direct-display",
+      bidMode: "dynamic",
+      currency: "USD",
+      intersectionRatio: state.intersectionRatio
+    });
+    return jsonEndpoint(item.endpoint, config, "direct-display", "", timeoutMs).then(function (ad) {
+      var candidate = normalizeCandidate({
+        partnerName: ad.partnerName || ad.sourceName || partnerName,
+        demandType: "direct-display",
+        bidMode: "dynamic",
+        cpm: numberValue(ad.cpm, 0),
+        currency: String(ad.currency || "").toUpperCase(),
+        responseTimeMs: Date.now() - startedAt,
+        configOrder: configOrder,
+        expiresAt: expiresAt,
+        timeoutMs: timeoutMs,
+        creative: {
+          type: ad.imageUrl ? "image" : ad.html ? "html" : "script",
+          imageUrl: ad.imageUrl || "",
+          html: ad.html || "",
+          scriptUrl: ad.scriptUrl || "",
+          clickUrl: ad.clickUrl || "",
+          impressionUrl: ad.impressionUrl || ""
+        }
+      }, config, state);
+      if (!isValidCandidate(candidate)) throw new Error("invalid-direct-display-bid");
+      trackCandidateResponse(config, state, candidate);
+      return candidate;
+    }).catch(function (error) {
+      track(config, "direct_display_failed", {
+        layer: "display",
+        partnerName: partnerName,
+        reason: error.message || "direct-display-no-bid",
+        auctionId: state.auctionId,
+        demandType: "direct-display",
+        bidMode: "dynamic",
+        currency: "USD",
+        responseTimeMs: Date.now() - startedAt,
+        intersectionRatio: state.intersectionRatio
+      });
+      return null;
+    });
+  }
+
+  function fixedScriptItems(config) {
+    var items = arrayFrom(config.displayScriptDemand).concat(arrayFrom(config.adserverScriptDemand));
+    listFrom(config.displayScriptUrls).forEach(function (endpoint) { items.push({ endpoint: endpoint }); });
+    listFrom(config.adserverScriptUrls).forEach(function (endpoint) { items.push({ endpoint: endpoint }); });
+    if (config.displayScriptUrl) items.push({ endpoint: config.displayScriptUrl });
+    return uniqueDemand(items.filter(function (item) { return item && item.endpoint; }), "endpoint");
+  }
+
+  function fixedHtmlItems(config) {
+    var items = arrayFrom(config.adserverHtmlDemand);
+    listFrom(config.adserverHtmlTags).forEach(function (html) { items.push({ html: html }); });
+    return uniqueDemand(items.filter(function (item) { return item && item.html; }), "html");
+  }
+
+  function fixedTagCandidate(item, demandType, creativeType, configOrder, expiresAt, config, state) {
+    var candidate = normalizeCandidate({
+      partnerName: item.name || (creativeType === "html" ? "GAM / MI" : "Display JS"),
+      demandType: demandType,
+      bidMode: "fixed",
+      cpm: numberValue(item.configuredBidCpm, numberValue(item.floorCpm, 0)),
+      currency: item.currency || config.currency || "USD",
+      responseTimeMs: 0,
+      configOrder: configOrder,
+      expiresAt: expiresAt,
+      timeoutMs: numberValue(item.timeoutMs, config.partnerTimeoutMs),
+      creative: creativeType === "html"
+        ? { type: "html", html: decodePayload(item.html) }
+        : { type: "script", scriptUrl: item.endpoint }
+    }, config, state);
+    trackCandidateResponse(config, state, candidate);
+    return candidate;
+  }
+
+  function normalizeCandidate(candidate) {
+    candidate.currency = String(candidate.currency || "").toUpperCase();
+    candidate.cpm = numberValue(candidate.cpm, 0);
+    candidate.responseTimeMs = Math.max(0, numberValue(candidate.responseTimeMs, 0));
+    candidate.configOrder = Math.max(0, numberValue(candidate.configOrder, 0));
+    return candidate;
+  }
+
+  function isValidCandidate(candidate) {
+    if (!candidate || candidate.cpm <= 0 || candidate.currency !== "USD" || !candidate.partnerName) return false;
+    if (candidate.expiresAt <= Date.now()) return false;
+    var creative = candidate.creative || {};
+    return creative.type === "video" || creative.type === "vpaid" ||
+      (creative.type === "image" && !!creative.imageUrl) ||
+      (creative.type === "html" && !!creative.html) ||
+      (creative.type === "script" && !!creative.scriptUrl);
+  }
+
+  function rankCandidates(candidates) {
+    return arrayFrom(candidates).sort(function (a, b) {
+      return b.cpm - a.cpm ||
+        Number(a.bidMode !== "dynamic") - Number(b.bidMode !== "dynamic") ||
+        a.responseTimeMs - b.responseTimeMs ||
+        a.configOrder - b.configOrder;
+    });
+  }
+
+  function trackCandidateResponse(config, state, candidate) {
+    if (!candidate) return;
+    track(config, "partner_bid_response", {
+      layer: candidate.demandType,
+      partnerName: candidate.partnerName,
+      cpm: candidate.cpm,
+      auctionId: state.auctionId,
+      demandType: candidate.demandType,
+      bidMode: candidate.bidMode,
+      currency: candidate.currency,
+      responseTimeMs: candidate.responseTimeMs,
+      intersectionRatio: state.intersectionRatio
+    });
+  }
+
+  function renderRankedCandidates(root, config, state) {
+    if (!isAuctionEligible(state) || state.rendering || state.filled || state.auctionCompleted) return;
+    state.bids = state.bids.filter(isValidCandidate);
+    if (!state.bids.length) {
+      if (state.renderAttempted) {
+        state.auctionCompleted = true;
+        track(config, "auction_no_bid", {
+          layer: "auction",
+          auctionId: state.auctionId,
+          reason: "ranked-candidates-exhausted",
+          intersectionRatio: state.intersectionRatio
+        });
+        renderNoAd(root, config);
+        return;
+      }
+      state.auctionStarted = false;
+      state.auctionCompleted = false;
+      beginEligibleAuction(root, config, state);
+      return;
+    }
+
+    var candidate = state.bids.shift();
+    var fallback = state.renderAttempted === true;
+    state.renderAttempted = true;
+    state.rendering = true;
+    track(config, fallback ? "fallback_bid_selected" : "auction_winner", {
+      layer: candidate.demandType,
+      partnerName: candidate.partnerName,
+      cpm: candidate.cpm,
+      auctionId: state.auctionId,
+      demandType: candidate.demandType,
+      bidMode: candidate.bidMode,
+      currency: candidate.currency,
+      responseTimeMs: candidate.responseTimeMs,
+      intersectionRatio: state.intersectionRatio
+    });
+
+    renderAuctionCandidate(root, config, candidate, function (result) {
+      state.rendering = false;
+      if (state.destroyed || state.filled) return;
+      if (result && result.filled) {
+        state.filled = true;
+        state.auctionCompleted = true;
+        state.bids = [];
+        clearCommercialTimers(state);
+        if (state.observer) state.observer.disconnect();
+        if (state.removeVisibilityListener) state.removeVisibilityListener();
+        return;
+      }
+      track(config, "winner_render_failed", {
+        layer: candidate.demandType,
+        partnerName: candidate.partnerName,
+        cpm: candidate.cpm,
+        reason: result && result.reason || "render-failed",
+        auctionId: state.auctionId,
+        demandType: candidate.demandType,
+        bidMode: candidate.bidMode,
+        currency: candidate.currency,
+        responseTimeMs: candidate.responseTimeMs,
+        intersectionRatio: state.intersectionRatio
+      });
+      clear(root);
+      if (isAuctionEligible(state)) renderRankedCandidates(root, config, state);
+      else scheduleBidExpiry(root, config, state);
+    });
+  }
+
+  function renderAuctionCandidate(root, config, candidate, callback) {
+    var creative = candidate.creative || {};
+    var ad = creative.ad || {
+      adType: creative.type === "image" ? "display" :
+        creative.type === "html" ? "adserver-html" : "display-js",
+      imageUrl: creative.imageUrl,
+      html: creative.html,
+      scriptUrl: creative.scriptUrl,
+      clickUrl: creative.clickUrl,
+      impressionUrl: creative.impressionUrl,
+      layer: candidate.demandType,
+      sourceName: candidate.partnerName,
+      cpm: candidate.cpm,
+      timeoutMs: candidate.timeoutMs
+    };
+    ad.layer = candidate.demandType;
+    ad.sourceName = candidate.partnerName;
+    ad.cpm = candidate.cpm;
+    ad.timeoutMs = candidate.timeoutMs;
+    if (creative.type === "video" || creative.type === "vpaid") {
+      renderVideo(root, config, ad, callback);
+      return;
+    }
+    renderDisplay(root, config, ad, callback);
+  }
+
+  function scheduleBidExpiry(root, config, state) {
+    if (state.expiryTimer) window.clearTimeout(state.expiryTimer);
+    var nearest = state.bids.reduce(function (value, candidate) {
+      return Math.min(value, candidate.expiresAt);
+    }, Date.now() + numberValue(config.bidTtlMs, 5000));
+    state.expiryTimer = window.setTimeout(function () {
+      state.expiryTimer = null;
+      state.bids = state.bids.filter(isValidCandidate);
+      if (state.bids.length || state.filled || state.auctionCompleted) return;
+      state.auctionStarted = false;
+      state.auctionRunning = false;
+      state.renderAttempted = false;
+      if (isAuctionEligible(state)) beginEligibleAuction(root, config, state);
+    }, Math.max(0, nearest - Date.now()));
+  }
+
+  function clearCommercialTimers(state) {
+    if (state.debounceTimer) window.clearTimeout(state.debounceTimer);
+    if (state.expiryTimer) window.clearTimeout(state.expiryTimer);
+    state.debounceTimer = null;
+    state.expiryTimer = null;
+    state.abortControllers.forEach(function (controller) {
+      try { controller.abort(); } catch (_) {}
+    });
+    state.abortControllers = [];
   }
 
   function startViewableRotation(root, config) {
@@ -538,9 +1079,15 @@
   function fetchVastTag(vastItem, config) {
     var vastTmax = numberValue(vastItem.timeoutMs, config.timeoutMs || 1800);
     var vastUrl = expandMacros(vastItem.endpoint || vastItem, config, vastTmax);
+    var commercialState = vastItem.__commercialState || {};
     track(config, "partner_request", {
       layer: "vast",
-      partnerName: vastItem.name || "VAST"
+      partnerName: vastItem.name || "VAST",
+      auctionId: commercialState.auctionId || "",
+      demandType: "vast",
+      bidMode: "fixed",
+      currency: String(vastItem.currency || config.currency || "USD").toUpperCase(),
+      intersectionRatio: commercialState.intersectionRatio
     });
 
     return withTimeout(fetch(vastUrl, { credentials: "omit" }), vastTmax)
@@ -797,6 +1344,12 @@
     label.textContent = "Ad";
 
     var fired = {};
+    var settled = false;
+    var startTimer = window.setTimeout(function () {
+      if (settled) return;
+      settled = true;
+      if (typeof onDone === "function") onDone({ filled: false, reason: "video-start-timeout" });
+    }, Math.max(750, numberValue(vast.timeoutMs, config.partnerTimeoutMs || 750)));
     video.addEventListener("playing", function () {
       if (!fired.impression) {
         fired.impression = true;
@@ -804,6 +1357,11 @@
         pixel(vast.impressionUrl);
       }
       fireOnce(fired, "start", vast, config);
+      if (!settled) {
+        settled = true;
+        window.clearTimeout(startTimer);
+        if (typeof onDone === "function") onDone({ filled: true, partnerName: vast.sourceName || "VAST" });
+      }
     });
     video.addEventListener("timeupdate", function () {
       var ratio = video.duration ? video.currentTime / video.duration : 0;
@@ -813,11 +1371,14 @@
     });
     video.addEventListener("ended", function () {
       fireOnce(fired, "complete", vast, config);
-      if (typeof onDone === "function") onDone();
     });
     video.addEventListener("error", function () {
       track(config, "video_error", { layer: vast.layer });
-      advanceRotation(root, "video_error");
+      if (!settled) {
+        settled = true;
+        window.clearTimeout(startTimer);
+        if (typeof onDone === "function") onDone({ filled: false, reason: "video_error" });
+      }
     });
 
     link.appendChild(video);
@@ -829,7 +1390,11 @@
     if (playResult && typeof playResult.catch === "function") {
       playResult.catch(function () {
         track(config, "autoplay_blocked", { layer: vast.layer });
-        advanceRotation(root, "autoplay_blocked");
+        if (!settled) {
+          settled = true;
+          window.clearTimeout(startTimer);
+          if (typeof onDone === "function") onDone({ filled: false, reason: "autoplay_blocked" });
+        }
       });
     }
   }
@@ -1009,6 +1574,7 @@
     var token = makeRequestId();
     var finished = false;
     var started = false;
+    var resultReported = false;
     var startTimeoutMs = Math.max(3000, numberValue(config.vpaidStartTimeoutMs, 8000));
     var maxDurationMs = Math.max(30000, numberValue(config.vpaidMaxDurationMs, 120000));
     var timeout = window.setTimeout(function () { finish("vpaid-start-timeout"); }, startTimeoutMs);
@@ -1038,8 +1604,10 @@
           reason: reason
         });
       }
-      if (typeof onDone === "function") onDone();
-      else advanceRotation(root, reason || "vpaid_complete");
+      if (reason !== "complete" && !resultReported && typeof onDone === "function") {
+        resultReported = true;
+        onDone({ filled: false, reason: reason || "vpaid_error" });
+      }
     }
 
     function onMessage(event) {
@@ -1060,6 +1628,10 @@
         );
         pixel(vast.impressionUrl);
         fireOnce({}, "start", vast, config);
+        if (!resultReported && typeof onDone === "function") {
+          resultReported = true;
+          onDone({ filled: true, partnerName: vast.sourceName || "VPAID" });
+        }
         return;
       }
 
@@ -1328,6 +1900,12 @@
     url.searchParams.set("partner_name", payload.partnerName || "");
     url.searchParams.set("reason", payload.reason || "");
     url.searchParams.set("cpm", payload.cpm || "");
+    url.searchParams.set("auction_id", payload.auctionId || "");
+    url.searchParams.set("demand_type", payload.demandType || "");
+    url.searchParams.set("bid_mode", payload.bidMode || "");
+    url.searchParams.set("currency", payload.currency || "");
+    url.searchParams.set("response_time_ms", payload.responseTimeMs === undefined ? "" : payload.responseTimeMs);
+    url.searchParams.set("intersection_ratio", payload.intersectionRatio === undefined ? "" : payload.intersectionRatio);
     url.searchParams.set("w", config.width);
     url.searchParams.set("h", config.height);
     url.searchParams.set("cb", String(Date.now()) + Math.floor(Math.random() * 100000));
@@ -1345,6 +1923,8 @@
   }
 
   function recordDeliveredImpression(config, layer, partnerName, cpm) {
+    if (config.__impressionTracked) return;
+    config.__impressionTracked = true;
     if (!config.__requestFilledTracked) {
       config.__requestFilledTracked = true;
       track(config, "request_filled", {
@@ -1494,5 +2074,17 @@
 
   function trimSlash(value) {
     return String(value || "").replace(/\/+$/, "");
+  }
+
+  if (window.__NEXBANNER_TEST__) {
+    window.NexBannerPlayer.__test = {
+      startCommercialAuction: startCommercialAuction,
+      isAuctionEligible: isAuctionEligible,
+      runUnifiedAuction: runUnifiedAuction,
+      rankCandidates: rankCandidates,
+      isValidCandidate: isValidCandidate,
+      renderRankedCandidates: renderRankedCandidates,
+      recordDeliveredImpression: recordDeliveredImpression
+    };
   }
 })();

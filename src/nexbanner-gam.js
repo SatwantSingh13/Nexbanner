@@ -28,6 +28,7 @@
       publisherDomain: data.publisherDomain || "",
       placementId: data.placementId || "",
       configId: data.configId || "",
+      configVersion: data.configVersion || "",
       configEndpoint: data.configEndpoint || "",
       apiBase: data.apiBase || "https://nexbid.uk",
       target: data.target || "",
@@ -58,7 +59,9 @@
       impressionUrl: data.impressionUrl || "",
       errorUrl: data.errorUrl || "",
       timeoutMs: numberOr(data.timeoutMs, 1800),
-      vastGraceMs: numberOr(data.vastGraceMs, 800),
+      auctionTimeoutMs: numberOr(data.auctionTimeoutMs, 900),
+      partnerTimeoutMs: numberOr(data.partnerTimeoutMs, 750),
+      bidTtlMs: numberOr(data.bidTtlMs, 5000),
       configTimeoutMs: numberOr(data.configTimeoutMs, 3000),
       cachebuster: String(Date.now()) + Math.floor(Math.random() * 1000000)
     };
@@ -69,8 +72,8 @@
 
     var endpoint = config.configEndpoint ||
       trimSlash(config.apiBase) + "/api/v1/config/" + encodeURIComponent(config.configId);
-    endpoint = withCachebuster(endpoint, config.cachebuster);
-    var pending = fetch(endpoint, { credentials: "omit", cache: "no-store" }).then(function (response) {
+    if (config.configVersion) endpoint = withConfigVersion(endpoint, config.configVersion);
+    var pending = fetch(endpoint, { credentials: "omit", cache: "default" }).then(function (response) {
       if (!response.ok) throw new Error("config-http-" + response.status);
       return response.json();
     });
@@ -149,13 +152,13 @@
   function trimSlash(value) {
     return String(value || "").replace(/\/+$/, "");
   }
-  function withCachebuster(url, cachebuster) {
+  function withConfigVersion(url, version) {
     try {
       var parsed = new URL(url, window.location.href);
-      parsed.searchParams.set("nbx_cb", cachebuster || String(Date.now()));
+      parsed.searchParams.set("v", version);
       return parsed.toString();
     } catch (_) {
-      return url + (url.indexOf("?") >= 0 ? "&" : "?") + "nbx_cb=" + encodeURIComponent(cachebuster || String(Date.now()));
+      return url + (url.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(version);
     }
   }
 })();

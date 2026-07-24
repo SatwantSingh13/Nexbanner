@@ -1,0 +1,8 @@
+{
+  "name": "nexbanner-v1-commercial",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/v1-commercial.test.mjs"
+  }
+}

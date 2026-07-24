@@ -97,7 +97,9 @@
       name: addedName,
       type: els.demandType.value,
       endpoint: els.demandEndpoint.value.trim(),
+      configuredBidCpm: els.demandType.value === "vast" ? els.floorCpm.value.trim() : "",
       floorCpm: els.floorCpm.value.trim(),
+      currency: "USD",
       timeoutMs: els.timeoutMs.value.trim()
     });
     els.demandForm.reset();
@@ -116,7 +118,9 @@
       id: String(Date.now()) + Math.floor(Math.random() * 10000),
       name: addedName,
       endpoint: els.displayTagUrl.value.trim(),
+      configuredBidCpm: els.displayTagFloor.value.trim(),
       floorCpm: els.displayTagFloor.value.trim(),
+      currency: "USD",
       timeoutMs: els.displayTagTimeout.value.trim()
     });
     els.displayTagForm.reset();
@@ -157,7 +161,9 @@
       tagType: els.adserverTagType.value,
       html: els.adserverHtml.value.trim(),
       endpoint: els.adserverUrl.value.trim(),
+      configuredBidCpm: els.adserverFloor.value.trim(),
       floorCpm: els.adserverFloor.value.trim(),
+      currency: "USD",
       timeoutMs: els.adserverTimeout.value.trim()
     });
     els.adserverForm.reset();
@@ -273,7 +279,7 @@
         "<button class=\"remove\" data-id=\"" + item.id + "\">Remove</button>",
         "</header>",
         "<code>" + escapeHtml(item.endpoint) + "</code>",
-        "<small>Floor $" + escapeHtml(item.floorCpm || "0") + " CPM, timeout " + escapeHtml(item.timeoutMs || "800") + "ms</small>"
+        "<small>" + (item.type === "display" ? "Dynamic CPM returned by endpoint" : "Configured fixed CPM $" + escapeHtml(item.configuredBidCpm || item.floorCpm || "0")) + ", timeout " + escapeHtml(item.timeoutMs || "800") + "ms</small>"
       ].join("");
 
       node.querySelector(".remove").addEventListener("click", function () {
@@ -335,7 +341,7 @@
         "<button class=\"remove\" data-id=\"" + item.id + "\">Remove</button>",
         "</header>",
         "<code>" + escapeHtml(item.endpoint) + "</code>",
-        "<small>Floor $" + escapeHtml(item.floorCpm || "0") + " CPM, timeout " + escapeHtml(item.timeoutMs || "800") + "ms</small>"
+        "<small>Configured fixed CPM $" + escapeHtml(item.configuredBidCpm || item.floorCpm || "0") + ", timeout " + escapeHtml(item.timeoutMs || "800") + "ms</small>"
       ].join("");
 
       node.querySelector(".remove").addEventListener("click", function () {
@@ -397,50 +403,13 @@
 
   function generateTag() {
     var config = buildConfig();
-    var vastTags = endpointsFor("vast");
-    var display = firstEndpoint("display");
-    var displayJsTags = endpointsFrom(state.displayTags);
-    var adserverTags = endpointsFrom(state.adserverTags);
-    var adserverHtmlTags = htmlTagsFrom(state.adserverTags);
-    var prebid = state.prebid[0] || null;
-    var prebidDemand = state.prebid.map(function (item) {
-      return {
-        name: item.name || "",
-        endpoint: item.endpoint || "",
-        params: item.params || ""
-      };
-    });
-    var ortbEndpoints = endpointsFor("ortb");
-    var apiBase = trimSlash(config.setup.apiBase);
-
-    var lines = [
-      '<div id="nexbanner-slot-%%CACHEBUSTER%%"></div>',
+    var configId = config.configId || "SAVE-CONFIG-FIRST";
+    els.tagOutput.value = [
       "<script",
       '  src="' + config.setup.cdnScript + '"',
-      '  data-target="nexbanner-slot-%%CACHEBUSTER%%"',
-      '  data-publisher-id="' + config.setup.publisherId + '"',
-      '  data-publisher-domain="' + config.setup.publisherDomain + '"',
-      '  data-placement-id="' + config.setup.placementId + '"',
-      '  data-width="' + config.setup.width + '"',
-      '  data-height="' + config.setup.height + '"',
-      '  data-mode="video-first"',
-      vastTags.length ? '  data-vast-tags="' + vastTags.join("|") + '"' : '  data-vast-url="' + apiBase + "/api/v1/vast" + '"',
-      '  data-auction-endpoint="' + apiBase + "/api/v1/auction" + '"',
-      '  data-track-url="' + apiBase + "/api/v1/track" + '"',
-      prebid && prebid.endpoint ? '  data-prebid-endpoint="' + prebid.endpoint + '"' : "",
-      prebid && prebid.params ? '  data-prebid-params="' + encodeAttribute(prebid.params) + '"' : "",
-      prebidDemand.length ? '  data-prebid-demand="' + encodeAttribute(encodeURIComponent(JSON.stringify(prebidDemand))) + '"' : "",
-      displayJsTags.length ? '  data-display-script-urls="' + displayJsTags.join("|") + '"' : "",
-      adserverTags.length ? '  data-adserver-script-urls="' + adserverTags.join("|") + '"' : "",
-      adserverHtmlTags.length ? '  data-adserver-html-tags="' + adserverHtmlTags.join("|") + '"' : "",
-      display ? '  data-display-endpoint="' + display.endpoint + '"' : "",
-      ortbEndpoints.length ? '  data-ortb-endpoints="' + ortbEndpoints.join("|") + '"' : "",
-      '  data-logo-text="N"',
-      '  data-click-url="https://nexbid.uk">',
+      '  data-config-id="' + configId + '">',
       "</script>"
-    ].filter(Boolean);
-
-    els.tagOutput.value = lines.join("\n");
+    ].join("\n");
   }
 
   function generateShortTag() {
@@ -523,6 +492,12 @@
 
   function buildConfig() {
     return {
+      productVersion: "Version 1",
+      rotationMode: "version-1-commercial-unified-auction",
+      auctionTimeoutMs: 900,
+      partnerTimeoutMs: 750,
+      bidTtlMs: 5000,
+      currency: "USD",
       setup: {
         publisherId: els.publisherId.value.trim(),
         publisherDomain: els.publisherDomain.value.trim(),
@@ -532,9 +507,9 @@
         cdnScript: els.cdnScript.value.trim(),
         apiBase: els.apiBase.value.trim()
       },
-      demand: state.demand,
+      demand: state.demand.filter(function (item) { return item.type !== "ortb"; }),
       displayTags: state.displayTags,
-      prebid: state.prebid,
+      prebid: [],
       adserverTags: state.adserverTags,
       configId: domainConfigId(els.publisherDomain.value.trim(), "Version 1")
     };
@@ -546,6 +521,8 @@
     config.rotationMode = "realtime-viewable-bidding";
     config.setup.cdnScript = "https://nexbid.uk/nexbanner/version-2-testing/src/nexbanner-gam.js";
     config.rotationMs = 10000;
+    config.demand = state.demand;
+    config.prebid = state.prebid;
     config.configId = domainConfigId(config.setup.publisherDomain, "Version 2 Testing");
     return config;
   }
@@ -761,7 +738,7 @@
       "<button class=\"remove\" data-id=\"" + item.id + "\">Remove</button>",
       "</header>",
       "<code>" + escapeHtml(endpointText) + "</code>",
-      "<small>Floor $" + escapeHtml(item.floorCpm || "0") + " CPM, timeout " + escapeHtml(item.timeoutMs || "800") + "ms</small>"
+      "<small>Configured fixed CPM $" + escapeHtml(item.configuredBidCpm || item.floorCpm || "0") + ", timeout " + escapeHtml(item.timeoutMs || "800") + "ms</small>"
     ].join("");
     return node;
   }
