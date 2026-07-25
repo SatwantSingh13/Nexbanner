@@ -445,3 +445,26 @@ test("18. New Version 1 tag release loads the commercial player", () => {
   assert.match(playerSource, /version-3-production-hybrid/);
   assert.match(playerSource, /eligibility_20_start/);
 });
+
+test("19. Empty iframe existence is not accepted as an impression", () => {
+  const harness = createHarness();
+  const monitor = harness.hooks.frameMonitorScript("token", false, 2000);
+  assert.doesNotMatch(monitor, /\^\(IFRAME\|IMG\|VIDEO/);
+  assert.match(monitor, /documentHasCreative\(e\.contentDocument\)/);
+  assert.match(monitor, /catch\(ignore\)\{\}/);
+});
+
+test("20. Images and videos require loaded media dimensions", () => {
+  const harness = createHarness();
+  const monitor = harness.hooks.frameMonitorScript("token", false, 2000);
+  assert.match(monitor, /e\.complete&&e\.naturalWidth>1&&e\.naturalHeight>1/);
+  assert.match(monitor, /e\.readyState>=2&&e\.videoWidth>1&&e\.videoHeight>1/);
+});
+
+test("21. GAM render confirmation still uses slotRenderEnded", () => {
+  const harness = createHarness();
+  const monitor = harness.hooks.frameMonitorScript("token", true, 2000);
+  assert.match(monitor, /slotRenderEnded/);
+  assert.match(monitor, /finish\(!e\.isEmpty,e\.isEmpty\?'gpt-empty':''\)/);
+  assert.match(monitor, /expectsGpt\?'gpt-timeout':'creative-timeout'/);
+});
