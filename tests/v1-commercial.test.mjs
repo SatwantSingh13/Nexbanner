@@ -468,3 +468,13 @@ test("21. GAM render confirmation still uses slotRenderEnded", () => {
   assert.match(monitor, /finish\(!e\.isEmpty,e\.isEmpty\?'gpt-empty':''\)/);
   assert.match(monitor, /expectsGpt\?'gpt-timeout':'creative-timeout'/);
 });
+
+test("22. Render confirmation uses separate JS and GAM timeouts", () => {
+  const harness = createHarness();
+  const jsMonitor = harness.hooks.frameMonitorScript("token", false, 8000);
+  const gamMonitor = harness.hooks.frameMonitorScript("token", true, 500);
+  assert.match(jsMonitor, /},1500\);/);
+  assert.match(gamMonitor, /},2000\);/);
+  assert.doesNotMatch(jsMonitor, /2500/);
+  assert.doesNotMatch(gamMonitor, /2500/);
+});

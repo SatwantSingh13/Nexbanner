@@ -2009,7 +2009,7 @@
   }
 
   function frameMonitorScript(token, expectsGpt, timeoutMs) {
-    var timeout = Math.max(2500, Math.min(8000, numberValue(timeoutMs, 4000) + 1200));
+    var timeout = expectsGpt ? 2000 : 1500;
     var tokenJson = JSON.stringify(token);
     return [
       "<script>(function(){",
