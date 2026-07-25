@@ -1432,7 +1432,9 @@
         ad.html,
         "</body></html>"
       ].join("");
-     frame.srcdoc = html
+      frame.contentWindow.document.open();
+      frame.contentWindow.document.write(html);
+      frame.contentWindow.document.close();
       root.appendChild(brandBadge(config));
       return;
     }
@@ -1497,7 +1499,9 @@
       "</body></html>"
     ].join("");
 
-    frame.srcdoc = html
+    frame.contentWindow.document.open();
+    frame.contentWindow.document.write(html);
+    frame.contentWindow.document.close();
     root.appendChild(brandBadge(config));
   }
 
