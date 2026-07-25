@@ -1,4 +1,4 @@
-// NexBanner Version 3 commercial unified-auction regression tests.
+// NexBanner Version 3 production-hybrid regression tests.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -224,27 +224,27 @@ test("1. No demand at 0% visibility", async () => {
   assert.equal(harness.fetchCalls.some((url) => url.includes("demand.example")), false);
 });
 
-test("2. No demand at 29% visibility", async () => {
+test("2. No demand below 20% visibility", async () => {
   const harness = createHarness();
   const config = baseConfig({ displayEndpoint: "https://demand.example/bid" });
   harness.hooks.startCommercialAuction(harness.root, config);
-  harness.observers[0].trigger(0.29);
+  harness.observers[0].trigger(0.19);
   await delay(230);
   assert.equal(harness.fetchCalls.some((url) => url.includes("demand.example")), false);
 });
 
-test("3. Auction starts once at 30% after 200 ms", async () => {
+test("3. Auction starts once at 20% after 200 ms", async () => {
   const harness = createHarness();
   const config = baseConfig();
   harness.hooks.startCommercialAuction(harness.root, config);
   const state = harness.root.__nbxCommercialAuction;
-  harness.observers[0].trigger(0.3);
+  harness.observers[0].trigger(0.2);
   await delay(180);
   assert.equal(state.auctionStarted, false);
   await delay(50);
   assert.equal(state.auctionStarted, true);
   const auctionId = state.auctionId;
-  harness.observers[0].trigger(0.3);
+  harness.observers[0].trigger(0.2);
   await delay(230);
   assert.equal(state.auctionId, auctionId);
 });
@@ -258,159 +258,108 @@ test("4. Hidden tab does not start auction", async () => {
   assert.equal(harness.root.__nbxCommercialAuction.auctionStarted, false);
 });
 
-test("5. VAST and direct display requests start together", async () => {
+test("5. All VAST requests start in parallel", async () => {
   const starts = [];
   const harness = createHarness(async (url) => {
     starts.push({ url, time: Date.now() });
-    if (url.includes("vast.example")) {
-      return {
-        ok: true,
-        text: async () => "<VAST><Ad><InLine><Impression>https://track.example/i</Impression><Creatives><Creative><Linear><MediaFiles><MediaFile type=\"video/mp4\">https://cdn.example/ad.mp4</MediaFile></MediaFiles></Linear></Creative></Creatives></InLine></Ad></VAST>"
-      };
-    }
     return {
       ok: true,
-      json: async () => ({
-        partnerName: "Display",
-        cpm: 0.42,
-        currency: "USD",
-        imageUrl: "https://cdn.example/ad.jpg"
-      })
+      text: async () => "<VAST><Ad><InLine><Impression>https://track.example/i</Impression><Creatives><Creative><Linear><MediaFiles><MediaFile type=\"video/mp4\">https://cdn.example/ad.mp4</MediaFile></MediaFiles></Linear></Creative></Creatives></InLine></Ad></VAST>"
     };
   });
   const config = baseConfig({
-    vastDemand: [{ name: "VAST", endpoint: "https://vast.example/tag", configuredBidCpm: 0.35 }],
-    displayDemand: [{ name: "Display", endpoint: "https://display.example/bid" }]
+    vastBudgetMs: 900,
+    slotExpiryMs: 30000,
+    vastDemand: [
+      { name: "Adsolut", endpoint: "https://adsolut.example/tag", priority: 1 },
+      { name: "Silverpush", endpoint: "https://silverpush.example/tag", priority: 2 },
+      { name: "Lemma VAST", endpoint: "https://lemma.example/tag", priority: 3 }
+    ]
   });
-  const bids = await harness.hooks.runUnifiedAuction(config, {
+  const winner = await harness.hooks.runVastOpportunity(config, {
     auctionId: "auction-1",
-    intersectionRatio: 0.3,
+    intersectionRatio: 0.2,
     abortControllers: []
   });
-  assert.equal(bids.length, 2);
-  assert.ok(Math.abs(starts[0].time - starts[1].time) < 25);
+  assert.equal(winner.partnerName, "Adsolut");
+  assert.equal(starts.length, 3);
+  assert.ok(Math.max(...starts.map((entry) => entry.time)) - Math.min(...starts.map((entry) => entry.time)) < 25);
 });
 
-test("6. Fixed GAM/MI candidate is ranked without execution", async () => {
-  const harness = createHarness();
-  const bids = await harness.hooks.runUnifiedAuction(baseConfig({
-    adserverHtmlDemand: [{
-      name: "GAM",
-      html: encodeURIComponent("<script src=\"https://loser.example/tag.js\"></script>"),
-      configuredBidCpm: 0.15,
-      currency: "USD"
-    }]
-  }), { auctionId: "auction-1", intersectionRatio: 0.3, abortControllers: [] });
-  assert.equal(bids[0].partnerName, "GAM");
-  assert.equal(harness.fetchCalls.some((url) => url.includes("loser.example")), false);
-});
-
-test("7. Highest CPM candidate wins", () => {
-  const harness = createHarness();
-  const expiresAt = Date.now() + 5000;
-  const ranked = harness.hooks.rankCandidates([
-    { cpm: 0.15, bidMode: "fixed", responseTimeMs: 1, configOrder: 0, expiresAt },
-    { cpm: 0.42, bidMode: "dynamic", responseTimeMs: 200, configOrder: 1, expiresAt }
-  ]);
-  assert.equal(ranked[0].cpm, 0.42);
-});
-
-test("8. Losing HTML/JS tag is not executed", async () => {
-  const harness = createHarness();
-  const bids = await harness.hooks.runUnifiedAuction(baseConfig({
-    displayScriptDemand: [
-      { name: "Winner", endpoint: "https://winner.example/tag.js", configuredBidCpm: 0.3, currency: "USD" },
-      { name: "Loser", endpoint: "https://loser.example/tag.js", configuredBidCpm: 0.1, currency: "USD" }
+test("6. VAST with an actual CPM beats priority-only VAST", async () => {
+  const harness = createHarness(async () => ({
+    ok: true,
+    text: async () => "<VAST><Ad><InLine><Creatives><Creative><Linear><MediaFiles><MediaFile type=\"video/mp4\">https://cdn.example/ad.mp4</MediaFile></MediaFiles></Linear></Creative></Creatives></InLine></Ad></VAST>"
+  }));
+  const config = baseConfig({
+    vastBudgetMs: 900,
+    slotExpiryMs: 30000,
+    vastDemand: [
+      { name: "Priority", endpoint: "https://priority.example/tag", priority: 1 },
+      { name: "Priced", endpoint: "https://priced.example/tag", bidCpm: 0.42, priority: 99 }
     ]
-  }), { auctionId: "auction-1", intersectionRatio: 0.3, abortControllers: [] });
-  assert.equal(bids.length, 2);
-  assert.equal(harness.fetchCalls.length, 0);
+  });
+  const winner = await harness.hooks.runVastOpportunity(config, {
+    auctionId: "auction-1",
+    intersectionRatio: 0.2,
+    abortControllers: []
+  });
+  assert.equal(winner.partnerName, "Priced");
+  assert.equal(winner.cpm, 0.42);
 });
 
-test("9. Winning fixed tag no fill triggers ranked fallback", async () => {
+test("7. Fixed tags carry no artificial CPM", () => {
   const harness = createHarness();
-  const config = baseConfig();
-  const state = {
-    destroyed: false,
-    intersectionRatio: 0.3,
-    rendering: false,
-    filled: false,
-    auctionCompleted: false,
-    bids: [
-      {
-        partnerName: "Fail",
-        demandType: "display-image",
-        bidMode: "fixed",
-        cpm: 0.3,
-        currency: "USD",
-        responseTimeMs: 0,
-        configOrder: 0,
-        expiresAt: Date.now() + 5000,
-        creative: { type: "image", imageUrl: "https://cdn.example/fail-image.jpg" }
-      },
-      {
-        partnerName: "Fallback",
-        demandType: "display-image",
-        bidMode: "fixed",
-        cpm: 0.2,
-        currency: "USD",
-        responseTimeMs: 0,
-        configOrder: 1,
-        expiresAt: Date.now() + 5000,
-        creative: { type: "image", imageUrl: "https://cdn.example/good.jpg" }
-      }
-    ],
-    abortControllers: [],
-    auctionId: "auction-1"
-  };
-  harness.hooks.renderRankedCandidates(harness.root, config, state);
-  await delay(20);
-  assert.equal(state.filled, true);
-  assert.equal(config.__impressionTracked, true);
+  const candidates = harness.hooks.waterfallTagCandidates(baseConfig({
+    displayScriptDemand: [{ name: "Lemma Display", endpoint: "https://lemma.example/tag.js", configuredBidCpm: 0.15 }]
+  }), { auctionId: "auction-1", intersectionRatio: 0.2 });
+  assert.equal(candidates[0].cpm, 0);
+  assert.equal(candidates[0].bidMode, "waterfall");
 });
 
-test("10. Video failure triggers ranked fallback", async () => {
+test("8. Display waterfall uses the required partner order", () => {
   const harness = createHarness();
-  const config = baseConfig();
-  const state = {
-    destroyed: false,
-    intersectionRatio: 0.3,
-    rendering: false,
-    filled: false,
-    auctionCompleted: false,
-    bids: [
-      {
-        partnerName: "Video",
-        demandType: "vast",
-        bidMode: "fixed",
-        cpm: 0.4,
-        currency: "USD",
-        responseTimeMs: 0,
-        configOrder: 0,
-        expiresAt: Date.now() + 5000,
-        creative: {
-          type: "video",
-          ad: { adType: "vast-video", mediaUrl: "https://cdn.example/fail-video.mp4", tracking: {} }
-        }
-      },
-      {
-        partnerName: "Image",
-        demandType: "display-image",
-        bidMode: "fixed",
-        cpm: 0.2,
-        currency: "USD",
-        responseTimeMs: 0,
-        configOrder: 1,
-        expiresAt: Date.now() + 5000,
-        creative: { type: "image", imageUrl: "https://cdn.example/good.jpg" }
-      }
-    ],
-    abortControllers: [],
-    auctionId: "auction-1"
-  };
-  harness.hooks.renderRankedCandidates(harness.root, config, state);
-  await delay(30);
-  assert.equal(state.filled, true);
+  const candidates = harness.hooks.waterfallTagCandidates(baseConfig({
+    displayScriptDemand: [{ name: "Lemma Display", endpoint: "https://lemma.example/tag.js" }],
+    adserverHtmlDemand: [
+      { name: "Increment X GAM Passback", html: encodeURIComponent("<div>ix-gam</div>") },
+      { name: "Auxo GAM / MI Passback", html: encodeURIComponent("<div>auxo</div>") },
+      { name: "Increment X JS", html: encodeURIComponent("<div>ix-js</div>") }
+    ]
+  }), { auctionId: "auction-1", intersectionRatio: 0.2 });
+  assert.deepEqual(
+    Array.from(candidates, (candidate) => candidate.partnerName),
+    ["Increment X JS", "Auxo GAM / MI Passback", "Increment X GAM Passback", "Lemma Display"]
+  );
+});
+
+test("9. Duplicate legacy tag entries execute only once", () => {
+  const harness = createHarness();
+  const tag = encodeURIComponent("<div>same</div>");
+  const candidates = harness.hooks.waterfallTagCandidates(baseConfig({
+    adserverHtmlDemand: [{ name: "Auxo", html: tag }],
+    adserverHtmlTags: [tag]
+  }), { auctionId: "auction-1", intersectionRatio: 0.2 });
+  assert.equal(candidates.length, 1);
+});
+
+test("10. VAST failure proceeds to the display waterfall", async () => {
+  const harness = createHarness(async (url) => {
+    if (url.includes("vast.example")) return { ok: false, status: 204 };
+    return { ok: true };
+  });
+  const config = baseConfig({
+    vastDemand: [{ name: "VAST", endpoint: "https://vast.example/tag" }],
+    adserverHtmlDemand: [{ name: "Auxo GAM / MI Passback", html: encodeURIComponent("<div>creative</div>") }]
+  });
+  harness.hooks.startCommercialAuction(harness.root, config);
+  harness.observers[0].trigger(0.2);
+  await delay(240);
+  const state = harness.root.__nbxCommercialAuction;
+  assert.equal(state.vastAttempted, true);
+  assert.equal(state.displayStarted, true);
+  assert.equal(state.displayPartnerIndex, 1);
+  harness.observers[0].trigger(0);
 });
 
 test("11. One request_filled maximum", () => {
@@ -437,29 +386,10 @@ test("12. One impression maximum", () => {
   assert.equal(events.filter((event) => event === "impression").length, 1);
 });
 
-test("13. No rotation after 10 seconds", async () => {
-  const harness = createHarness(async (url) => {
-    if (url.includes("display.example")) {
-      return {
-        ok: true,
-        json: async () => ({
-          partnerName: "Display",
-          cpm: 0.42,
-          currency: "USD",
-          imageUrl: "https://cdn.example/ad.jpg"
-        })
-      };
-    }
-    return { ok: true };
-  });
-  const config = baseConfig({ displayEndpoint: "https://display.example/bid" });
-  harness.hooks.startCommercialAuction(harness.root, config);
-  harness.observers[0].trigger(0.3);
-  await delay(300);
-  assert.equal(harness.root.__nbxCommercialAuction.filled, true);
-  const demandCalls = harness.fetchCalls.filter((url) => url.includes("display.example")).length;
-  await delay(10050);
-  assert.equal(harness.fetchCalls.filter((url) => url.includes("display.example")).length, demandCalls);
+test("13. Production hybrid has no internal refresh or floor retry", () => {
+  const commercialBody = /function startCommercialAuction[\s\S]*?function runUnifiedAuction/.exec(playerSource)?.[0] || "";
+  assert.doesNotMatch(commercialBody, /setInterval|floorReduction|retryAttempt|startHybridCycle/);
+  assert.match(commercialBody, /slotExpiryMs/);
 });
 
 test("14. Video completion does not show another ad", () => {
@@ -512,5 +442,6 @@ test("18. New Version 1 tag release loads the commercial player", () => {
   assert.match(loaderSource, /configVersion/);
   assert.match(loaderSource, /cache:\s*"default"/);
   assert.doesNotMatch(loaderSource, /nbx_cb/);
-  assert.match(playerSource, /version-1-commercial-unified-auction/);
+  assert.match(playerSource, /version-3-production-hybrid/);
+  assert.match(playerSource, /eligibility_20_start/);
 });
