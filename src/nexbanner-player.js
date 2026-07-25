@@ -1,4 +1,4 @@
-/*! NexBanner Version 3 — commercial unified-auction player, release tag v=20260724-6. */
+/*! NexBanner Version 3 — production hybrid: one VAST opportunity, then Version 1 display waterfall. */
 (function () {
   "use strict";
 
@@ -81,14 +81,22 @@
       abortControllers: [],
       requestId: config.requestId,
       auctionId: "",
-      eligibilityTracked: false
+      eligibilityTracked: false,
+      cycleToken: 0,
+      vastAttempted: false,
+      displayStarted: false,
+      displayPartnerIndex: 0
     };
     root.__nbxCommercialAuction = state;
-    config.rotationMode = "version-1-commercial-unified-auction";
-    config.auctionTimeoutMs = numberValue(config.auctionTimeoutMs, 900);
-    config.partnerTimeoutMs = numberValue(config.partnerTimeoutMs, 750);
-    config.bidTtlMs = numberValue(config.bidTtlMs, 5000);
+    config.rotationMode = "version-3-production-hybrid";
+    config.viewabilityThreshold = numberValue(config.viewabilityThreshold, 0.2);
+    config.viewabilityDelayMs = numberValue(config.viewabilityDelayMs, 200);
+    config.vastBudgetMs = numberValue(config.vastBudgetMs, 900);
+    config.vastStartTimeoutMs = numberValue(config.vastStartTimeoutMs, 1500);
+    config.displayPartnerTimeoutMs = numberValue(config.displayPartnerTimeoutMs, 2000);
+    config.slotExpiryMs = numberValue(config.slotExpiryMs, 30000);
     config.currency = String(config.currency || "USD").toUpperCase();
+    state.viewabilityThreshold = config.viewabilityThreshold;
 
     function eligibleNow() {
       return isAuctionEligible(state);
@@ -103,7 +111,7 @@
       if (!eligibleNow() || state.filled || state.auctionCompleted || state.debounceTimer) return;
       if (!state.eligibilityTracked) {
         state.eligibilityTracked = true;
-        track(config, "eligibility_30_start", {
+        track(config, "eligibility_20_start", {
           layer: "viewability",
           intersectionRatio: state.intersectionRatio
         });
@@ -113,7 +121,7 @@
         if (!eligibleNow() || state.filled || state.auctionCompleted) return;
         state.eligible = true;
         beginEligibleAuction(root, config, state);
-      }, 200);
+      }, config.viewabilityDelayMs);
     }
 
     function markIneligible() {
@@ -121,17 +129,30 @@
       state.eligible = false;
       if (state.eligibilityTracked) {
         state.eligibilityTracked = false;
-        track(config, "eligibility_30_end", {
+        track(config, "eligibility_20_end", {
           layer: "viewability",
+          intersectionRatio: state.intersectionRatio
+        });
+      }
+      if (state.auctionStarted && !state.filled && !state.auctionCompleted) {
+        state.cycleToken += 1;
+        state.auctionRunning = false;
+        state.rendering = false;
+        state.auctionCompleted = true;
+        clearCommercialTimers(state);
+        clear(root);
+        track(config, "auction_cancelled", {
+          layer: "viewability",
+          auctionId: state.auctionId,
+          reason: document.visibilityState === "visible" ? "viewability-lost" : "page-hidden",
           intersectionRatio: state.intersectionRatio
         });
       }
     }
 
     function onVisibilityChange() {
-      if (document.visibilityState === "visible" && state.intersectionRatio >= 0.3) {
+      if (document.visibilityState === "visible" && state.intersectionRatio >= config.viewabilityThreshold) {
         scheduleEligibility();
-        if (state.bids.length && !state.rendering) renderRankedCandidates(root, config, state);
       } else {
         markIneligible();
       }
@@ -151,32 +172,29 @@
     state.observer = new IntersectionObserver(function (entries) {
       var entry = entries[0];
       state.intersectionRatio = entry && entry.isIntersecting ? numberValue(entry.intersectionRatio, 0) : 0;
-      if (state.intersectionRatio >= 0.3 && document.visibilityState === "visible") {
+      if (state.intersectionRatio >= config.viewabilityThreshold && document.visibilityState === "visible") {
         scheduleEligibility();
-        if (state.bids.length && !state.rendering) renderRankedCandidates(root, config, state);
       } else {
         markIneligible();
       }
-    }, { threshold: [0, 0.3, 1] });
+    }, { threshold: [0, config.viewabilityThreshold, 1] });
     state.observer.observe(root);
   }
 
   function isAuctionEligible(state) {
     return !state.destroyed &&
-      state.intersectionRatio >= 0.3 &&
+      state.intersectionRatio >= numberValue(state.viewabilityThreshold, 0.2) &&
       document.visibilityState === "visible";
   }
 
   function beginEligibleAuction(root, config, state) {
     if (!isAuctionEligible(state) || state.auctionRunning || state.rendering || state.filled || state.auctionCompleted) return;
-    if (state.bids.length) {
-      renderRankedCandidates(root, config, state);
-      return;
-    }
-
     state.auctionStarted = true;
     state.auctionRunning = true;
+    state.vastAttempted = true;
     state.auctionId = makeRequestId();
+    state.cycleToken += 1;
+    var cycleToken = state.cycleToken;
     preconnectDemand(config);
     track(config, "auction_started", {
       layer: "auction",
@@ -184,38 +202,218 @@
       intersectionRatio: state.intersectionRatio
     });
 
-    runUnifiedAuction(config, state).then(function (bids) {
+    state.expiryTimer = window.setTimeout(function () {
+      if (state.filled || state.auctionCompleted || cycleToken !== state.cycleToken) return;
+      state.cycleToken += 1;
       state.auctionRunning = false;
-      if (state.destroyed || state.filled) return;
-      state.bids = rankCandidates(bids).filter(function (candidate) {
-        return isValidCandidate(candidate);
+      state.rendering = false;
+      state.auctionCompleted = true;
+      clearCommercialTimers(state);
+      track(config, "auction_no_bid", {
+        layer: "auction",
+        auctionId: state.auctionId,
+        reason: "slot-expired",
+        intersectionRatio: state.intersectionRatio
       });
-      if (!state.bids.length) {
-        state.auctionCompleted = true;
-        track(config, "auction_no_bid", {
-          layer: "auction",
+      renderNoAd(root, config);
+    }, config.slotExpiryMs);
+
+    runVastOpportunity(config, state).then(function (candidate) {
+      state.auctionRunning = false;
+      if (state.destroyed || state.filled || state.auctionCompleted || cycleToken !== state.cycleToken) return;
+      if (!candidate) {
+        startDisplayWaterfall(root, config, state, cycleToken, "vast-no-fill");
+        return;
+      }
+      state.rendering = true;
+      track(config, "vast_winner_selected", candidateTracking(candidate, state));
+      renderAuctionCandidate(root, config, candidate, function (result) {
+        state.rendering = false;
+        if (state.destroyed || state.filled || state.auctionCompleted || cycleToken !== state.cycleToken) return;
+        if (result && result.filled) {
+          completeCommercialCycle(state);
+          return;
+        }
+        track(config, "vast_render_failed", {
+          layer: "vast",
+          partnerName: candidate.partnerName,
+          reason: result && result.reason || "video-start-failed",
           auctionId: state.auctionId,
+          intersectionRatio: state.intersectionRatio
+        });
+        startDisplayWaterfall(root, config, state, cycleToken, "vast-render-failed");
+      });
+    }).catch(function (error) {
+      state.auctionRunning = false;
+      if (state.destroyed || state.filled || state.auctionCompleted || cycleToken !== state.cycleToken) return;
+      startDisplayWaterfall(root, config, state, cycleToken, error.message || "vast-error");
+    });
+  }
+
+  function runVastOpportunity(config, state) {
+    var items = arrayFrom(config.vastDemand).slice();
+    listFrom(config.vastTags).forEach(function (endpoint) { items.push({ endpoint: endpoint }); });
+    if (config.vastUrl) items.push({ endpoint: config.vastUrl });
+    items = uniqueDemand(items, "endpoint");
+    if (!items.length) return Promise.resolve(null);
+
+    var tasks = items.map(function (item, configOrder) {
+      var startedAt = Date.now();
+      var requestItem = {};
+      Object.keys(item || {}).forEach(function (key) { requestItem[key] = item[key]; });
+      requestItem.timeoutMs = Math.min(numberValue(item.timeoutMs, config.vastBudgetMs), config.vastBudgetMs);
+      requestItem.__commercialState = state;
+      return fetchVastTag(requestItem, config).then(function (vast) {
+        var actualCpm = numberValue(item.bidCpm, numberValue(item.cpm, 0));
+        var candidate = normalizeCandidate({
+          partnerName: item.name || "VAST",
+          demandType: "vast",
+          bidMode: actualCpm > 0 ? "dynamic" : "priority",
+          cpm: actualCpm,
+          priority: numberValue(item.priority, configOrder),
+          currency: item.currency || config.currency || "USD",
+          responseTimeMs: Date.now() - startedAt,
+          configOrder: configOrder,
+          expiresAt: Date.now() + config.slotExpiryMs,
+          timeoutMs: config.vastStartTimeoutMs,
+          creative: { type: vast.adType === "vpaid-js" ? "vpaid" : "video", ad: vast }
+        });
+        trackCandidateResponse(config, state, candidate);
+        return candidate;
+      }).catch(function (error) {
+        track(config, "vast_tag_failed", {
+          layer: "vast",
+          partnerName: item.name || "VAST",
+          reason: error.message || "vast-no-fill",
+          auctionId: state.auctionId,
+          demandType: "vast",
+          responseTimeMs: Date.now() - startedAt,
+          intersectionRatio: state.intersectionRatio
+        });
+        return null;
+      });
+    });
+
+    return withTimeout(Promise.all(tasks), config.vastBudgetMs)
+      .catch(function () { return []; })
+      .then(function (results) {
+        return results.filter(Boolean).sort(function (a, b) {
+          var aHasPrice = a.bidMode === "dynamic" && a.cpm > 0;
+          var bHasPrice = b.bidMode === "dynamic" && b.cpm > 0;
+          if (aHasPrice && bHasPrice) return b.cpm - a.cpm || a.responseTimeMs - b.responseTimeMs;
+          if (aHasPrice !== bHasPrice) return aHasPrice ? -1 : 1;
+          return a.priority - b.priority || a.configOrder - b.configOrder;
+        })[0] || null;
+      });
+  }
+
+  function startDisplayWaterfall(root, config, state, cycleToken, reason) {
+    if (state.displayStarted || state.filled || state.auctionCompleted || cycleToken !== state.cycleToken) return;
+    state.displayStarted = true;
+    state.displayPartnerIndex = 0;
+    var candidates = waterfallTagCandidates(config, state);
+    track(config, "display_waterfall_started", {
+      layer: "display-waterfall",
+      auctionId: state.auctionId,
+      reason: reason || "",
+      intersectionRatio: state.intersectionRatio
+    });
+
+    function next() {
+      if (state.destroyed || state.filled || state.auctionCompleted || cycleToken !== state.cycleToken) return;
+      if (!isAuctionEligible(state)) return;
+      if (state.displayPartnerIndex >= candidates.length) {
+        state.auctionCompleted = true;
+        clearCommercialTimers(state);
+        track(config, "auction_no_bid", {
+          layer: "display-waterfall",
+          auctionId: state.auctionId,
+          reason: "display-waterfall-exhausted",
           intersectionRatio: state.intersectionRatio
         });
         renderNoAd(root, config);
         return;
       }
-      if (isAuctionEligible(state)) {
-        renderRankedCandidates(root, config, state);
-      } else {
-        scheduleBidExpiry(root, config, state);
-      }
-    }).catch(function (error) {
-      state.auctionRunning = false;
-      state.auctionCompleted = true;
-      track(config, "auction_no_bid", {
-        layer: "auction",
-        auctionId: state.auctionId,
-        reason: error.message || "auction-error",
-        intersectionRatio: state.intersectionRatio
+
+      var candidate = candidates[state.displayPartnerIndex++];
+      state.rendering = true;
+      track(config, "partner_request", candidateTracking(candidate, state));
+      renderAuctionCandidate(root, config, candidate, function (result) {
+        state.rendering = false;
+        if (state.destroyed || state.filled || state.auctionCompleted || cycleToken !== state.cycleToken) return;
+        if (result && result.filled) {
+          track(config, "waterfall_winner", candidateTracking(candidate, state));
+          completeCommercialCycle(state);
+          return;
+        }
+        clear(root);
+        next();
       });
-      renderNoAd(root, config);
+    }
+
+    next();
+  }
+
+  function waterfallTagCandidates(config, state) {
+    var items = [];
+    fixedScriptItems(config).forEach(function (item, index) {
+      items.push({ item: item, type: "script", sourceOrder: index });
     });
+    fixedHtmlItems(config).forEach(function (item, index) {
+      items.push({ item: item, type: "html", sourceOrder: 1000 + index });
+    });
+    var seen = {};
+    return items.filter(function (entry) {
+      var key = entry.type === "html" ? entry.item.html : entry.item.endpoint;
+      if (!key || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    }).sort(function (a, b) {
+      return waterfallPriority(a.item.name) - waterfallPriority(b.item.name) ||
+        a.sourceOrder - b.sourceOrder;
+    }).map(function (entry, index) {
+      return fixedTagCandidate(
+        entry.item,
+        entry.type === "html" ? "html-tag" : "js-tag",
+        entry.type,
+        index,
+        Date.now() + numberValue(config.slotExpiryMs, 30000),
+        config,
+        state
+      );
+    });
+  }
+
+  function waterfallPriority(name) {
+    var value = String(name || "").toLowerCase();
+    if (value.indexOf("increment") >= 0 && value.indexOf("js") >= 0 && value.indexOf("gam") < 0) return 10;
+    if (value.indexOf("auxo") >= 0) return 20;
+    if (value.indexOf("increment") >= 0 && value.indexOf("gam") >= 0) return 30;
+    if (value.indexOf("lemma") >= 0) return 40;
+    return 100;
+  }
+
+  function candidateTracking(candidate, state) {
+    return {
+      layer: candidate.demandType,
+      partnerName: candidate.partnerName,
+      cpm: candidate.cpm || "",
+      auctionId: state.auctionId,
+      demandType: candidate.demandType,
+      bidMode: candidate.bidMode,
+      currency: candidate.currency,
+      responseTimeMs: candidate.responseTimeMs,
+      intersectionRatio: state.intersectionRatio
+    };
+  }
+
+  function completeCommercialCycle(state) {
+    state.filled = true;
+    state.auctionCompleted = true;
+    state.bids = [];
+    clearCommercialTimers(state);
+    if (state.observer) state.observer.disconnect();
+    if (state.removeVisibilityListener) state.removeVisibilityListener();
   }
 
   function runUnifiedAuction(config, state) {
@@ -424,18 +622,17 @@
     var candidate = normalizeCandidate({
       partnerName: item.name || (creativeType === "html" ? "GAM / MI" : "Display JS"),
       demandType: demandType,
-      bidMode: "fixed",
-      cpm: numberValue(item.configuredBidCpm, numberValue(item.floorCpm, 0)),
+      bidMode: "waterfall",
+      cpm: 0,
       currency: item.currency || config.currency || "USD",
       responseTimeMs: 0,
       configOrder: configOrder,
       expiresAt: expiresAt,
-      timeoutMs: numberValue(item.timeoutMs, config.partnerTimeoutMs),
+      timeoutMs: numberValue(item.timeoutMs, config.displayPartnerTimeoutMs || 2000),
       creative: creativeType === "html"
         ? { type: "html", html: decodePayload(item.html) }
         : { type: "script", scriptUrl: item.endpoint }
     }, config, state);
-    trackCandidateResponse(config, state, candidate);
     return candidate;
   }
 
@@ -2081,6 +2278,9 @@
     window.NexBannerPlayer.__test = {
       startCommercialAuction: startCommercialAuction,
       isAuctionEligible: isAuctionEligible,
+      runVastOpportunity: runVastOpportunity,
+      waterfallTagCandidates: waterfallTagCandidates,
+      startDisplayWaterfall: startDisplayWaterfall,
       runUnifiedAuction: runUnifiedAuction,
       rankCandidates: rankCandidates,
       isValidCandidate: isValidCandidate,
