@@ -1493,7 +1493,7 @@
       "<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:transparent}</style>",
       "</head><body>",
       frameMonitorScript(frame.__nbxMonitorToken, false, ad.timeoutMs || config.timeoutMs),
-      "<script src=\"" + safeScriptUrl + "\"><\\/script>",
+      "<script src=\"" + safeScriptUrl + "\"></" + "script>",
       "</body></html>"
     ].join("");
 
@@ -1818,7 +1818,7 @@
       "function visibleCreative(){var n=document.body.querySelectorAll('*');for(var i=0;i<n.length;i++){var e=n[i],tag=e.tagName;if(tag==='SCRIPT'||tag==='STYLE'||tag==='LINK'||tag==='META')continue;var r=e.getBoundingClientRect(),s=getComputedStyle(e);if(r.width<=10||r.height<=10||s.display==='none'||s.visibility==='hidden'||Number(s.opacity)===0)continue;if(/^(IFRAME|IMG|VIDEO|CANVAS|OBJECT|EMBED)$/.test(tag)||s.backgroundImage!=='none'||String(e.textContent||'').trim())return true;}return false;}",
       "var poll=setInterval(function(){if(done){clearInterval(poll);return;}if(!expectsGpt&&Date.now()-start>350&&visibleCreative())finish(true,'');},250);",
       "setTimeout(function(){clearInterval(poll);finish(false,expectsGpt?'gpt-timeout':'creative-timeout');}," + timeout + ");",
-      "})();<\\/script>"
+      "})();</" + "script>"
     ].join("");
   }
 
