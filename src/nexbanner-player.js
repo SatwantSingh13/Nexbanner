@@ -1581,7 +1581,6 @@
 
     link.appendChild(video);
     root.appendChild(link);
-    root.appendChild(brandBadge(config));
     root.appendChild(label);
 
     var playResult = video.play();
@@ -1632,7 +1631,6 @@
       frame.contentWindow.document.open();
       frame.contentWindow.document.write(html);
       frame.contentWindow.document.close();
-      root.appendChild(brandBadge(config));
       return;
     }
 
@@ -1671,7 +1669,6 @@
 
     link.appendChild(image);
     root.appendChild(link);
-    root.appendChild(brandBadge(config));
   }
 
   function renderDisplayScript(root, config, ad, onResult) {
@@ -1699,7 +1696,6 @@
     frame.contentWindow.document.open();
     frame.contentWindow.document.write(html);
     frame.contentWindow.document.close();
-    root.appendChild(brandBadge(config));
   }
 
   function renderNoAd(root, config) {
@@ -1727,8 +1723,6 @@
       ".nbx-click{display:block;width:100%;height:100%;text-decoration:none;color:inherit;}",
       ".nbx-video,.nbx-image,.nbx-frame{display:block;width:100%;height:100%;border:0;object-fit:cover;}",
       ".nbx-label{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.62);color:#fff;font-size:10px;padding:3px 5px;border-radius:3px;}",
-      ".nbx-brand{position:absolute;top:6px;left:6px;z-index:2;width:28px;height:28px;border-radius:7px;background:rgba(255,255,255,.92);box-shadow:0 2px 8px rgba(0,0,0,.18);display:flex;align-items:center;justify-content:center;overflow:hidden;font-weight:700;font-size:16px;color:#1769e0;letter-spacing:0;}",
-      ".nbx-brand img{display:block;width:100%;height:100%;object-fit:contain;}",
       ".nbx-status{position:absolute;inset:0;background:transparent;}",
       ".nbx-empty{background:transparent;}"
     ].join("");
@@ -1736,24 +1730,6 @@
     target.appendChild(style);
     target.appendChild(root);
     return root;
-  }
-
-  function brandBadge(config) {
-    var badge = document.createElement("div");
-    badge.className = "nbx-brand";
-    badge.title = "NexBanner";
-
-    if (config.logoUrl) {
-      var image = document.createElement("img");
-      image.src = config.logoUrl;
-      image.alt = "Nexbid";
-      image.onerror = function () { badge.textContent = config.logoText || "N"; };
-      badge.appendChild(image);
-      return badge;
-    }
-
-    badge.textContent = config.logoText || "N";
-    return badge;
   }
 
   function setStatus(root, message, preserveRenderedAd) {
@@ -1844,7 +1820,6 @@
     window.addEventListener("message", onMessage);
     root.__nbxFrameCleanup = cleanup;
     root.appendChild(frame);
-    root.appendChild(brandBadge(config));
 
     var mediaUrlJson = jsonForInlineScript(vast.mediaUrl);
     var adParametersJson = jsonForInlineScript(vast.adParameters || "");
