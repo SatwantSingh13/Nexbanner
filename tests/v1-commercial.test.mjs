@@ -478,3 +478,9 @@ test("22. Render confirmation uses separate JS and GAM timeouts", () => {
   assert.doesNotMatch(jsMonitor, /2500/);
   assert.doesNotMatch(gamMonitor, /2500/);
 });
+
+test("23. Production creatives do not receive a NexBanner badge overlay", () => {
+  assert.doesNotMatch(playerSource, /brandBadge\(/);
+  assert.doesNotMatch(playerSource, /\.nbx-brand/);
+  assert.doesNotMatch(playerSource, /title\s*=\s*"NexBanner"/);
+});
